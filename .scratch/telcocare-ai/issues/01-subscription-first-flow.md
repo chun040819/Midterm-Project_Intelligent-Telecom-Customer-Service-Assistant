@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 建立 Next.js、FastAPI、SQLite 的可啟動完整流程；提供 setup、dev、test 入口與必要環境範例，機密只存在伺服器。
 - [ ] 建立規格六表與外鍵、CHECK、唯一 Quote、單客戶 Pending 約束；固定 Seed 含五客戶、四方案、五訂閱、15 帳單、15 用量、四歷史申請，測試使用獨立 DB。
@@ -17,4 +17,5 @@
 ## Comments
 
 - 2026-11-03 實作完成程式與自動化測試（pytest 17、vitest 10、tsc、next build 通過；FastAPI／Next.js 本機啟動與頁面渲染已煙霧測試）。
-- **未標 resolved**：缺少 `LLM_API_KEY`，真模型 Tool Calling／Streaming／`present` 回送續接與 T01 完整流程（P499／499 元／2027-06-30 卡片）尚未實測。需使用者填入 `.env` 後驗證。
+- 2026-11-03 真模型驗證（NKUST Furen-large，瀏覽器實測）：T01「我現在是什麼方案？」→ 模型呼叫 get_my_subscription（FastAPI 收到請求）→ present 渲染 SubscriptionCard（P499／標準型／499 元／25 GB／80 分鐘／2027-06-30，由 data_ref 解析）→ `sendAutomaticallyWhen` 續接，模型輸出文字摘要。Streaming、Tool trace 可展開皆正常。附帶：「查一下 C0002 的帳單」回固定拒絕句型。
+- 已知小問題（不影響驗收）：助理文字的 Markdown `**` 未渲染；回應約 30–40 秒（模型端較慢）。
