@@ -1,0 +1,32 @@
+{
+  "name": "telcocare-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1 -p 3000",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.82",
+    "@ai-sdk/react": "^4.0.163",
+    "@assistant-ui/ai-sdk": "^0.0.16",
+    "@assistant-ui/generative-ui": "^0.0.8",
+    "@assistant-ui/next": "^0.0.25",
+    "@assistant-ui/react": "^0.15.32",
+    "ai": "^7.0.159",
+    "next": "^16.4.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
