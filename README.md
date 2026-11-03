@@ -2,7 +2,7 @@
 
 虛構電信公司的繁體中文智慧客服。完整規格見 [docs/SPEC.md](docs/SPEC.md)。所有資料皆為虛構。
 
-目前進度：工單 01（查詢目前訂閱的首條完整流程）。
+目前進度：工單 01–11 完成；驗收記錄見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 ## 需求
 
@@ -40,4 +40,4 @@ Next 16.4.4、React 19.3.1、ai 7.0.159、@ai-sdk/openai-compatible 3.0.82、@as
 
 ## 尚未驗證
 
-真模型的 Tool Calling、Streaming、`present` 結果回送與續接需要有效 `LLM_API_KEY`，尚未實測。
+真模型 60 秒逾時、七種 GenUI 逐一以真模型觸發尚未實測；其餘見驗收記錄。

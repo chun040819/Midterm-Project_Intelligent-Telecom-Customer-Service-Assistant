@@ -69,3 +69,35 @@ def test_reset_is_repeatable(db_path):
         conn.execute("DELETE FROM bills")
     reset_db(db_path)
     assert rows(db_path, "SELECT COUNT(*) FROM bills") == [(15,)]
+
+
+def _dump(db_path):
+    tables = ["plans", "customers", "subscriptions", "bills", "usage_records", "plan_change_requests"]
+    return {t: rows(db_path, f"SELECT * FROM {t} ORDER BY 1") for t in tables}
+
+
+def test_e09_reset_removes_new_request_and_restores_four_seed_requests(client, db_path):
+    from backend.db.seed import reset_db
+
+    baseline = _dump(db_path)
+    with connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO plan_change_requests VALUES ('R-NEW','Q-NEW','C0001','P499','P699','PENDING','2026-11-03T10:00:00+08:00')"
+        )
+        conn.execute("UPDATE subscriptions SET plan_id='P999' WHERE customer_id='C0002'")
+        conn.execute("UPDATE bills SET amount=1 WHERE bill_id='B-C0001-202610'")
+    assert len(rows(db_path, "SELECT * FROM plan_change_requests")) == 5
+
+    reset_db(db_path)
+
+    assert _dump(db_path) == baseline
+    assert [r[0] for r in rows(db_path, "SELECT request_id FROM plan_change_requests ORDER BY 1")] == [
+        "R-SEED-001", "R-SEED-002", "R-SEED-003", "R-SEED-004",
+    ]
+    assert rows(
+        db_path, "SELECT COUNT(*) FROM plan_change_requests WHERE customer_id='C0001' AND status='PENDING'"
+    ) == [(0,)]
+    # Reset 後 C0001 可重新評估升級（沒有 Pending 衝突）
+    from backend.tests.conftest import call
+    r = call(client, "estimate_plan_change", {"new_plan_id": "P699"})
+    assert r.status_code == 200 and r.json()["data"]["eligible"] is True

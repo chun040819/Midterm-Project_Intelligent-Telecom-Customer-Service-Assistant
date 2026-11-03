@@ -1,0 +1,6 @@
+== 起始（Reset 後） {'C0001 requests': [], 'all requests': 4, 'C0001 subscription plan': 'P499'}
+== T06 estimate eligible/delta True 200
+== T07/確認前（estimate 不寫入） {'C0001 requests': [], 'all requests': 4, 'C0001 subscription plan': 'P499'}
+== T08 第一次確認 201 {'request_id': 'R-7459DCA190A7', 'quote_id': 'Q-ACCEPT-1', 'old_plan_id': 'P499', 'new_plan_id': 'P699', 'status': 'PENDING', 'created_at': '2026-11-03T11:34:18+08:00', 'already_existed': False} {'C0001 requests': [('R-7459DCA190A7', 'Q-ACCEPT-1', 'PENDING')], 'all requests': 5, 'C0001 subscription plan': 'P499'}
+== T09 重複確認 200 {'request_id': 'R-7459DCA190A7', 'quote_id': 'Q-ACCEPT-1', 'old_plan_id': 'P499', 'new_plan_id': 'P699', 'status': 'PENDING', 'created_at': '2026-11-03T11:34:18+08:00', 'already_existed': True} {'C0001 requests': [('R-7459DCA190A7', 'Q-ACCEPT-1', 'PENDING')], 'all requests': 5, 'C0001 subscription plan': 'P499'}
+== E09 Reset 後 {'C0001 requests': [], 'all requests': 4, 'C0001 subscription plan': 'P499'}

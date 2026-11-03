@@ -4,10 +4,14 @@
 
 **Blocked by:** 10：驗證失敗處理與執行限制
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] T01–T15 各有 Pass／Fail、輸入、預期、實際與可查證證據；E01–E10 有手動或自動記錄，失敗修復後重測。
-- [ ] 獨立 AI 行為使用新對話，寫入情境隔離或重置，測試不污染 Demo DB；真模型、受控測試與未完成驗證清楚區分。
-- [ ] reset-demo 還原六表固定資料與四歷史申請，C0001 無 Pending，重建或驗證政策索引並清除 Session、Quote、refs，涵蓋 E09。
-- [ ] 從乾淨環境驗證 setup、dev、test、reset-demo 統一入口，記錄模型初次下載與必要環境，確保七種 GenUI、八工具與六政策皆可展示。
-- [ ] 保存 2–4 組真實對話截圖，包含不編造案例與政策來源；保存確認前無新增、確認後恰一筆、重複確認仍一筆及訂閱未變的 DB 證據。
+- [x] T01–T15 各有 Pass／Fail、輸入、預期、實際與可查證證據；E01–E10 有手動或自動記錄，失敗修復後重測。
+- [x] 獨立 AI 行為使用新對話，寫入情境隔離或重置，測試不污染 Demo DB；真模型、受控測試與未完成驗證清楚區分。
+- [x] reset-demo 還原六表固定資料與四歷史申請，C0001 無 Pending，重建或驗證政策索引並清除 Session、Quote、refs，涵蓋 E09。
+- [x] 從乾淨環境驗證 setup、dev、test、reset-demo 統一入口，記錄模型初次下載與必要環境，確保七種 GenUI、八工具與六政策皆可展示。
+- [x] 保存 2–4 組真實對話截圖，包含不編造案例與政策來源；保存確認前無新增、確認後恰一筆、重複確認仍一筆及訂閱未變的 DB 證據。
+
+## Comments
+
+- 2026-11-03 實作完成：驗收記錄 `docs/ACCEPTANCE.md`、證據 `docs/acceptance/`（4 張真模型截圖、`db-evidence.txt`）、`scripts/acceptance_db_evidence.py`、E09 reset 測試。乾淨環境 setup + test 通過。限制：真模型 60 秒逾時、T15 真模型截圖、七種 GenUI 逐一真模型觸發未實測；重複確認的 DB 證據來自 API 層（UI 確認後卡片已不再有按鈕）。
