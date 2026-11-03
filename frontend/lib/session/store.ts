@@ -25,6 +25,12 @@ export function getSession(id: string | undefined): DemoSession | undefined {
   return id ? sessions.get(id) : undefined;
 }
 
+/** 切換客戶：換身分並清掉所有舊客戶的工具快取（日後 Quote 也在此清除）。 */
+export function switchCustomer(session: DemoSession, customerId: string): void {
+  session.customerId = customerId;
+  session.dataRefs.clear();
+}
+
 export function registerDataRef(session: DemoSession, tool: string, envelope: ToolEnvelope<unknown>): string {
   const ref = `ref_${randomUUID()}`;
   session.dataRefs.set(ref, { tool, envelope });

@@ -1,14 +1,33 @@
-import { ensureSession, jsonWithSession, sessionFromRequest } from "@/lib/session/http";
-import { resolveDataRef } from "@/lib/session/store";
+import { ensureSession, isSameOrigin, jsonWithSession, sessionFromRequest } from "@/lib/session/http";
+import { DEMO_CUSTOMERS, isDemoCustomerId } from "@/lib/session/demo-customers";
+import { resolveDataRef, switchCustomer } from "@/lib/session/store";
 
-const DISPLAY_NAMES: Record<string, string> = { C0001: "Demo 客戶 A" };
+function errorBody(code: string, message: string) {
+  return { status: "error", data: null, error: { code, message } };
+}
 
 export function getDemoAccount(req: Request): Response {
   const { session, setCookie } = ensureSession(req);
   return jsonWithSession(
-    { customer_id: session.customerId, display_name: DISPLAY_NAMES[session.customerId] ?? session.customerId },
+    { customer_id: session.customerId, display_name: DEMO_CUSTOMERS[session.customerId] ?? session.customerId },
     setCookie,
   );
+}
+
+/** 切換 Demo 客戶：同源 Origin、strict 白名單；成功即清除該 Session 的工具快取。 */
+export async function setDemoAccount(req: Request): Promise<Response> {
+  if (!isSameOrigin(req)) {
+    return jsonWithSession(errorBody("FORBIDDEN", "請求來源不被允許。"), null, 403);
+  }
+  const body: unknown = await req.json().catch(() => null);
+  const keys = body && typeof body === "object" ? Object.keys(body) : [];
+  const customerId = (body as { customer_id?: unknown } | null)?.customer_id;
+  if (keys.length !== 1 || !isDemoCustomerId(customerId)) {
+    return jsonWithSession(errorBody("VALIDATION_ERROR", "只能選擇五個 Demo 客戶之一。"), null, 422);
+  }
+  const { session, setCookie } = ensureSession(req);
+  switchCustomer(session, customerId);
+  return jsonWithSession({ customer_id: customerId, display_name: DEMO_CUSTOMERS[customerId] }, setCookie);
 }
 
 /** GenUI 卡片以此解析 Session 內可信 data_ref；Browser 取得的永遠是伺服器快取的結果。 */

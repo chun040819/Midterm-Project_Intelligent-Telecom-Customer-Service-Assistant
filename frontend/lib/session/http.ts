@@ -32,3 +32,17 @@ export function jsonWithSession(body: unknown, setCookie: string | null, status 
   if (setCookie) headers.append("Set-Cookie", setCookie);
   return new Response(JSON.stringify(body), { status, headers });
 }
+
+/** 變更狀態的請求需帶同源 Origin（SPEC §6.2）；缺少或與 Host 不同一律視為跨站。 */
+export function isSameOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  const host = req.headers.get("host") ?? new URL(req.url).host;
+  return originHost === host;
+}

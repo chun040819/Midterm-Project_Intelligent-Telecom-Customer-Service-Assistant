@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { executeReadTool } from "@/lib/server/tool-executor";
-import { clearAllSessions, createSession, resolveDataRef } from "@/lib/session/store";
+import { clearAllSessions, createSession, resolveDataRef, switchCustomer } from "@/lib/session/store";
 
 const subscription = {
   status: "success",
@@ -76,5 +76,28 @@ describe("executeReadTool(get_my_subscription)", () => {
     const result = await executeReadTool(session, "get_my_subscription", {}, { fetch });
     expect(calls).toHaveLength(2);
     expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "INTERNAL_ERROR" } });
+  });
+});
+
+describe("客戶隔離證據（T13／E03）", () => {
+  it("T13：模型輸入夾帶 customer_id 或其他身分欄位一律被拒，不發出內部請求", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(subscription));
+    for (const args of [{ customer_id: "C0002" }, { session_id: "x" }, { internal_token: "x" }]) {
+      const result = await executeReadTool(session, "get_my_subscription", args, { fetch });
+      expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "VALIDATION_ERROR" } });
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("E03：切換客戶後，內部請求改用新客戶身分，舊 data_ref 失效", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(subscription));
+    const before = await executeReadTool(session, "get_my_subscription", {}, { fetch });
+    switchCustomer(session, "C0002");
+    expect(resolveDataRef(session, before.data_ref!)).toBeUndefined();
+    await executeReadTool(session, "get_my_subscription", {}, { fetch });
+    const ids = calls.map((c) => (c.init.headers as Record<string, string>)["X-Demo-Customer-Id"]);
+    expect(ids).toEqual(["C0001", "C0002"]);
   });
 });
