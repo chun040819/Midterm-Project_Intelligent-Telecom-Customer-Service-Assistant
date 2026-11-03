@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-TW"><head><meta charset="utf-8"><title>F115118105_詹前淳_Midterm</title>
+<style>
+@page{size:A4;margin:16mm}
+body{font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;font-size:10.5pt;line-height:1.5;color:#111}
+h1{font-size:18pt;margin:0 0 6px}h2{font-size:13pt;border-bottom:2px solid #0b5cad;padding-bottom:3px;margin:18px 0 8px;break-after:avoid}
+h3{font-size:11pt;margin:14px 0 4px;break-after:avoid}
+table{border-collapse:collapse;width:100%;margin:6px 0}td,th{border:1px solid #999;padding:4px 7px;vertical-align:top;text-align:left}
+th{background:#e8eef6;width:34%}
+img{max-width:100%;border:1px solid #bbb;display:block;margin:6px 0;max-height:105mm}
+pre{background:#f4f4f4;border:1px solid #ccc;padding:6px;font-size:8pt;white-space:pre-wrap;word-break:break-all}
+.todo{background:#fff3b0;font-weight:bold}.note{color:#555;font-size:9pt}
+section{break-inside:avoid-page}
+</style></head><body>
+<h1>Midterm Project Report: My Own Language Model App</h1>
+
+<h2>Basic Information</h2>
+<table>
+<tr><th>Student ID</th><td>F115118105</td></tr>
+<tr><th>Name</th><td>詹前淳</td></tr>
+<tr><th>Project title</th><td>Intelligent Telecom Customer Service Assistant（TelcoCare AI）</td></tr>
+<tr><th>Techniques you used</th><td>Tool Calling、RAG（另有 Generative UI 卡片）</td></tr>
+<tr><th>Model you used</th><td>對話模型 <code>Furen-max</code>；RAG 嵌入模型 <code>Embedding</code>（皆為課程 NKUST AI Hub 服務）</td></tr>
+<tr><th>How you built the chat screen</th><td>Next.js 16 + React 19 + assistant-ui（Vercel AI SDK），後端 FastAPI + SQLite</td></tr>
+<tr><th>GitHub link (public repository)</th><td>https://github.com/chun040819/Midterm-Project_Intelligent-Telecom-Customer-Service-Assistant</td></tr>
+<tr><th>Demo video (optional)</th><td>未提供</td></tr>
+</table>
+
+<h2>1. Your Topic</h2>
+<table>
+<tr><th>What is your topic?</th><td>虛構電信公司的繁體中文智慧客服，可查本人訂閱、帳單、流量、比較資費、依政策回答，並建立方案變更申請。</td></tr>
+<tr><th>Where and when is it used?</th><td>客戶在網頁客服視窗詢問方案與合約問題，或要升級／降級方案時使用（單機教學 Demo）。</td></tr>
+<tr><th>Who are the users?</th><td>電信客戶（Demo 有三位虛構客戶 C0001–C0003），以及檢視申請結果的評閱者。</td></tr>
+<tr><th>What do they need?</th><td>目前方案、每月帳單、流量是否超額、方案價格比較、合約／降級政策，以及確認後送出方案變更申請。</td></tr>
+<tr><th>Why can a general AI chat not do this?</th><td>一般 AI 不知道這間公司的客戶資料、資費與政策，也無法把申請寫進資料庫；本系統由工具讀 DB、由 RAG 引用政策來源、確認後才寫入。</td></tr>
+</table>
+
+<h2>2. What Your App Uses</h2>
+<table>
+<tr><th>☑ Reads data from a database</th><td><code>get_my_subscription</code>、<code>get_my_bill</code>、<code>get_my_usage</code>、<code>list_plans</code> 從 SQLite 讀取；客戶身分由伺服器 Session 決定，工具沒有 customer_id 參數。</td></tr>
+<tr><th>☑ Writes data into a database</th><td>使用者在確認卡片按「確認送出」後，<code>confirm_plan_change</code> 才在 <code>plan_change_requests</code> 新增一筆 PENDING；重複確認回同一筆。</td></tr>
+<tr><th>☑ An agent that calls tools</th><td>模型自行選擇 <code>get_my_*</code>、<code>list_plans</code>、<code>estimate_plan_change</code>、<code>search_policy</code>、申請狀態查詢等工具，Next.js 驗證後轉呼叫 FastAPI。</td></tr>
+<tr><th>☑ RAG</th><td>六份政策文件切成 19 個片段，以雲端 Embedding 建索引；<code>search_policy</code> 回傳片段與來源（檔名#段落），資訊不足時回報不足。</td></tr>
+<tr><th>☑ Handles user requests</th><td>可評估升級／降級、取消評估、確認建立申請、查詢申請狀態；不支援項目與越權要求固定拒絕。</td></tr>
+<tr><th>☑ Something else</th><td>Generative UI：帳單、流量、方案比較與圖表、方案變更確認、申請狀態、政策來源卡片；卡片數值由 Session 內 data_ref 解析，非模型自填。</td></tr>
+</table>
+
+<h2>3. Your App in Action</h2>
+<section>
+<h3>Conversation 1: 升級到 P699（評估後等待確認）</h3>
+<p><b>What the user wanted, and why the answer is correct:</b> C0001 說「我想申請升級到 P699」。模型呼叫 <code>estimate_plan_change</code>；卡片顯示 P499→P699、月租 499→699、差額 +200（與 plans 表一致）、報價有效期限，且說明只會新增待審申請。此時尚未寫入 DB。</p>
+<img src="../acceptance/01-quote-card.jpg">
+</section>
+<section>
+<h3>Conversation 2: 合約未到期可否降級（RAG 引用來源）</h3>
+<p><b>What the user wanted, and why the answer is correct:</b> 使用者問「合約未到期可以降級嗎？」。模型呼叫 <code>search_policy</code>，回答「合約到期日前不得提出降級申請」，並附來源 <code>plan_change_policy#downgrade_rules</code>，與 <code>knowledge/plan_change_policy.md</code> 規則相同。</p>
+<img src="../acceptance/03-policy-source.jpg">
+</section>
+<section>
+<h3>Conversation 3: Your App Does Not Make Things Up（違約金與雙十一優惠）</h3>
+<p><b>What the user asked, and how the app answered honestly:</b> 使用者問「提前解約的違約金是多少？有沒有雙十一優惠？」。知識庫沒有違約金金額與優惠資料，回覆標示「違約金資訊不足」並說明不得自行估算，未編造數字或優惠，僅引用 <code>cancellation_policy</code> 的一般說明。此畫面同輪第二次 <code>search_policy</code> 顯示「失敗」，最終回覆仍只引用知識庫內容。</p>
+<img src="../acceptance/04-no-fabrication.jpg">
+</section>
+<section>
+<h3>Data was really saved（確認後寫入 DB）</h3>
+<p>在另一輪展示中，使用者按「確認送出」後建立 PENDING 申請，訂閱仍為 P499：</p>
+<img src="../acceptance/02-confirmed-pending.jpg">
+<p>以下為驗收腳本（<code>scripts/acceptance_db_evidence.py</code>）直接查詢 SQLite 的輸出（獨立一輪，申請編號與上圖不同）。確認前 C0001 無申請、全表 4 筆；確認後新增 1 筆 PENDING、全表 5 筆、訂閱仍為 P499；重複確認不新增（<code>already_existed=True</code>）；Reset 後回到 4 筆。</p>
+<pre>EOF
+cat docs/acceptance/db-evidence.txt >> docs/report/report.html
+cat >> docs/report/report.html <<'EOF'
+</pre>
+</section>
+
+<h2>4. How You Built It</h2>
+<table>
+<tr><th>Which AI tools you used</th><td>Claude Code</td></tr>
+<tr><th>Where you used them</th><td>☑ In a console (a command-line tool)　☐ Inside VS Code　☐ In a web chat page　☐ Other tools</td></tr>
+<tr><th>About how many hours</th><td class="todo">【待填：實際開發工時，needs-info】</td></tr>
+<tr><th>What you used them for</th><td>規格與工單拆分、寫程式與測試、驗收（含瀏覽器與真模型）、修 Bug、整理文件。</td></tr>
+</table>
+<p><b>One problem and how I solved it:</b> 工單 06 的第一版 RAG 用本機嵌入模型。真模型驗收時 <code>search_policy</code> 回傳 INTERNAL_ERROR，最終回答「無法確認」，查到 transformers 缺少 <code>dependency_versions_table</code>，真嵌入測試因此被跳過。我改用課程提供的雲端 Embedding 服務，補上索引與校準設定綁定的檢查，重測後 10 項真嵌入測試通過，並重新驗收 Conversation 2。AI 在寫程式、測試與找出失敗點上幫助最大；它也曾把「確定性測試通過」寫成像真模型驗證，我要求改成明確分級並標示哪些沒有實測（例如 T07、T15 的真模型提示注入、60 秒逾時）。</p>
+
+<h2>Checklist</h2>
+<p>☐ PDF 命名為 F115118105_詹前淳_Midterm.pdf，並上傳課程網站（上傳由本人操作）<br>
+☑ 使用 Tool Calling 與 RAG<br>
+☐ GitHub 公開，連結在 Basic Information，且無痕視窗可開啟（推送後確認）<br>
+☑ Repo 含程式碼、資料檔、<code>.env.example</code>、依賴鎖定檔、<code>README.md</code>、<code>.gitignore</code>，不含 <code>.env</code>；API Key 不在檔案與前端程式碼中<br>
+☑ 資料皆為虛構</p>
+</body></html>

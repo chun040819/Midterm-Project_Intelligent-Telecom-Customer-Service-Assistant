@@ -2,7 +2,7 @@
 
 虛構電信公司的繁體中文智慧客服。完整規格見 [docs/SPEC.md](docs/SPEC.md)。所有資料皆為虛構。
 
-目前進度：工單 01–11 完成；驗收記錄見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+目前進度：工單 01–11 完成；驗收記錄見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)，期中報告來源見 [docs/report/report.html](docs/report/report.html)。
 
 ## 需求
 
@@ -34,7 +34,7 @@ Next 16.4.4、React 19.3.1、ai 7.0.159、@ai-sdk/openai-compatible 3.0.82、@as
 
 ## 模型固定版本
 
-- 對話模型：`Furen-large`（`.env` 的 `LLM_MODEL`，課程 NKUST AI Hub 託管）。
+- 對話模型：`Furen-max`（`.env` 的 `LLM_MODEL`，課程 NKUST AI Hub 託管）。
 - RAG 嵌入模型：`EMBEDDING_MODEL`（課程服務目前使用 `Embedding`），沿用 `LLM_BASE_URL` 和 `LLM_API_KEY`。建索引會傳送政策文件，檢索會傳送問題至該服務。切換模型、服務或政策文件後，執行 `set -a; . ./.env; set +a; .venv/bin/python -m scripts.calibrate_policy`，確認正負向距離可分後將閾值及識別碼填入 `EMBEDDING_MAX_DISTANCE`、`EMBEDDING_CALIBRATION_ID` 並重建索引。索引與模型或校準設定不符會報錯。同一服務內模型更新也需要重新校準。
 - 固定業務判定日：`.env` 的 `DEMO_BUSINESS_DATE`（預設 2026-11-03），為 FastAPI 唯一來源。
 
