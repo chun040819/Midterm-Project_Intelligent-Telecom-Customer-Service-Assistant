@@ -19,3 +19,5 @@
 - 驗證（真 e5 模型已於本機下載並實跑）：pytest 65 通過（含 `test_policy_real_model.py` 真模型：所有片段 <=512 tokens；T14「合約未到期可以降級嗎？」命中 `plan_change_policy#downgrade_rules`；「流量用完後會加收費用嗎？」命中 `data_usage_policy#exceeded`；E04「提前解約…違約金」命中 `cancellation_policy#penalty_unknown`、「5G 企業漫遊 8 折」/天氣/義大利麵回 INSUFFICIENT_EVIDENCE）；E06 以假 Embedder 測試注入字句只作為純資料 content 回傳，回應結構無額外欄位；vitest 40 通過、tsc 通過。另以 TestClient + 真模型 + 真 Chroma 索引直接打 `search_policy` 四題，結果與上述一致。
 - 未驗證：未設定 `LLM_API_KEY`，未做真 LLM 的 /api/chat 串流往返（模型是否依 System Prompt 呼叫 search_policy、渲染 PolicyReference、E06 下是否抵抗注入）；PolicyReference 未在瀏覽器實測渲染。需在有金鑰的環境補驗。
 - 2026-11-03 review-fixes：Status 由 resolved 改回 ready-for-agent，因真 LLM 往返與瀏覽器渲染尚未驗證；「真模型來源對照證據」項取消勾選，待有 LLM_API_KEY 時補驗。
+
+- 2026-11-03 補驗：使用已授權的真對話模型詢問「合約未到期可以降級嗎？」；模型呼叫 search_policy，但工具回傳 INTERNAL_ERROR，最終回答無法確認，未取得來源卡片。當前 .venv 載入 transformers 時缺少 dependency_versions_table，真嵌入模型測試 11 項跳過；尚未確認此缺失是否為既有後端錯誤根因。完整測試：pytest 99 通過、11 跳過；前端 typecheck 通過、vitest 83 通過。瀏覽器工具設定檔被既有程序占用，尚未驗證卡片渲染；E06 真模型注入驗收仍未執行。保留 ready-for-agent。
