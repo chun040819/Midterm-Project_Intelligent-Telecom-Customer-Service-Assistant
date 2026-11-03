@@ -31,6 +31,11 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.get_my_subscription,
       execute: async (args) => executeReadTool(session, "get_my_subscription", args),
     }),
+    list_plans: tool({
+      description: "列出目前有效的資費方案（月租、流量、通話分鐘）。max_monthly_fee 為非負整數預算上限，可省略；無符合方案時回傳空清單。",
+      inputSchema: toolInputSchemas.list_plans,
+      execute: async (args) => executeReadTool(session, "list_plans", args),
+    }),
     get_my_bill: tool({
       description: "查詢目前客戶的月份帳單（金額、到期日、繳費狀態）。billing_month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
       inputSchema: toolInputSchemas.get_my_bill,
@@ -40,6 +45,11 @@ export async function POST(req: Request) {
       description: "搜尋虛構電信公司的合約、流量、帳單、解約與變更政策（本地知識庫）。query 為使用者的政策問題。查無依據會回 INSUFFICIENT_EVIDENCE。",
       inputSchema: toolInputSchemas.search_policy,
       execute: async (args) => executeReadTool(session, "search_policy", args),
+    }),
+    get_my_usage: tool({
+      description: "查詢目前客戶的月份流量與通話用量（額度、已用、剩餘、超額、語音分鐘）。month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
+      inputSchema: toolInputSchemas.get_my_usage,
+      execute: async (args) => executeReadTool(session, "get_my_usage", args),
     }),
   };
 

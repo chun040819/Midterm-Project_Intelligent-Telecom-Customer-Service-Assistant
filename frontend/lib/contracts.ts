@@ -53,12 +53,28 @@ export type SearchPolicyResult = z.infer<typeof SearchPolicyResultSchema>;
 
 /** `document_id#section_id`；僅允許小寫英數與底線，不接受路徑、URL。 */
 export const SourceRefSchema = z.string().regex(/^[a-z0-9_]+#[a-z0-9_]+$/);
+export const PlansResultSchema = z.object({ plans: z.array(PlanSchema) });
+
+export type PlansResult = z.infer<typeof PlansResultSchema>;
+
+export const UsageResultSchema = z.object({
+  month: MonthSchema,
+  data_limit_gb: z.number().nonnegative(),
+  data_used_gb: z.number().nonnegative(),
+  remaining_data_gb: z.number().nonnegative(),
+  exceeded_data_gb: z.number().nonnegative(),
+  voice_used_minutes: z.number().int().nonnegative(),
+});
+
+export type UsageResult = z.infer<typeof UsageResultSchema>;
 
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
   get_my_bill: z.object({ billing_month: MonthSchema.optional() }).strict(),
   search_policy: z.object({ query: z.string().min(1).max(500) }).strict(),
+  list_plans: z.object({ max_monthly_fee: z.number().int().nonnegative().optional() }).strict(),
+  get_my_usage: z.object({ month: MonthSchema.optional() }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

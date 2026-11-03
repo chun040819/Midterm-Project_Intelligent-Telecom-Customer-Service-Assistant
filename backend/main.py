@@ -78,10 +78,71 @@ def get_my_bill(conn: sqlite3.Connection, customer_id: str, args: BillArguments)
     )
 
 
+class PlansArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 預設值不經驗證；明確傳入 null、負數、小數、字串或布林仍會被拒絕。
+    max_monthly_fee: Annotated[int, Field(ge=0, strict=True)] = None  # type: ignore[assignment]
+
+
+def list_plans(conn: sqlite3.Connection, _customer_id: str, args: PlansArguments):
+    ceiling = args.max_monthly_fee
+    rows = conn.execute(
+        """SELECT plan_id, name, monthly_fee, data_limit_gb, voice_minutes, is_active
+           FROM plans WHERE is_active = 1 AND (? IS NULL OR monthly_fee <= ?)
+           ORDER BY monthly_fee, plan_id""",
+        (ceiling, ceiling),
+    ).fetchall()
+    return success(
+        {
+            "plans": [
+                {
+                    "plan_id": pid, "name": name, "monthly_fee": fee,
+                    "data_limit_gb": gb, "voice_minutes": mins, "is_active": bool(active),
+                }
+                for pid, name, fee, gb, mins, active in rows
+            ]
+        }
+    )
+
+
+class UsageArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 預設值不經驗證；明確傳入 null 或無效月份仍會被拒絕，不視為省略。
+    month: Month = None  # type: ignore[assignment]
+
+
+def get_my_usage(conn: sqlite3.Connection, customer_id: str, args: UsageArguments):
+    # 月份額度取自目前訂閱方案（SPEC §4.2）；剩餘／超額由已用量與額度計算，不為負值。
+    if args.month is None:
+        where, params = "u.customer_id = ? ORDER BY u.month DESC LIMIT 1", (customer_id,)
+    else:
+        where, params = "u.customer_id = ? AND u.month = ?", (customer_id, args.month)
+    row = conn.execute(
+        "SELECT u.month, p.data_limit_gb, u.data_used_gb, u.voice_used_minutes "
+        "FROM usage_records u JOIN subscriptions s ON s.customer_id = u.customer_id "
+        f"JOIN plans p ON p.plan_id = s.plan_id WHERE {where}",
+        params,
+    ).fetchone()
+    if row is None:
+        msg = f"目前查無 {args.month} 的流量資料" if args.month else "目前查詢不到符合條件的資料，請確認查詢條件。"
+        return error_response(404, "NOT_FOUND", msg)
+    month, limit, used, minutes = row
+    return success(
+        {
+            "month": month, "data_limit_gb": limit, "data_used_gb": used,
+            "remaining_data_gb": round(max(0.0, limit - used), 6),
+            "exceeded_data_gb": round(max(0.0, used - limit), 6),
+            "voice_used_minutes": minutes,
+        }
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
 TOOLS = {
+    "list_plans": (PlansArguments, list_plans),
     "get_my_subscription": (NoArguments, get_my_subscription),
     "get_my_bill": (BillArguments, get_my_bill),
+    "get_my_usage": (UsageArguments, get_my_usage),
 }
 
 
