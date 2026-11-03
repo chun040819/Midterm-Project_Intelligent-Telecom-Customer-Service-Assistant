@@ -66,9 +66,12 @@ section{break-inside:avoid-page}
 <p>在另一輪展示中，使用者按「確認送出」後建立 PENDING 申請，訂閱仍為 P499：</p>
 <img src="../acceptance/02-confirmed-pending.jpg">
 <p>以下為驗收腳本（<code>scripts/acceptance_db_evidence.py</code>）直接查詢 SQLite 的輸出（獨立一輪，申請編號與上圖不同）。確認前 C0001 無申請、全表 4 筆；確認後新增 1 筆 PENDING、全表 5 筆、訂閱仍為 P499；重複確認不新增（<code>already_existed=True</code>）；Reset 後回到 4 筆。</p>
-<pre>EOF
-cat docs/acceptance/db-evidence.txt >> docs/report/report.html
-cat >> docs/report/report.html <<'EOF'
+<pre>== 起始（Reset 後） {&#x27;C0001 requests&#x27;: [], &#x27;all requests&#x27;: 4, &#x27;C0001 subscription plan&#x27;: &#x27;P499&#x27;}
+== T06 estimate eligible/delta True 200
+== T07/確認前（estimate 不寫入） {&#x27;C0001 requests&#x27;: [], &#x27;all requests&#x27;: 4, &#x27;C0001 subscription plan&#x27;: &#x27;P499&#x27;}
+== T08 第一次確認 201 {&#x27;request_id&#x27;: &#x27;R-7459DCA190A7&#x27;, &#x27;quote_id&#x27;: &#x27;Q-ACCEPT-1&#x27;, &#x27;old_plan_id&#x27;: &#x27;P499&#x27;, &#x27;new_plan_id&#x27;: &#x27;P699&#x27;, &#x27;status&#x27;: &#x27;PENDING&#x27;, &#x27;created_at&#x27;: &#x27;2026-11-03T11:34:18+08:00&#x27;, &#x27;already_existed&#x27;: False} {&#x27;C0001 requests&#x27;: [(&#x27;R-7459DCA190A7&#x27;, &#x27;Q-ACCEPT-1&#x27;, &#x27;PENDING&#x27;)], &#x27;all requests&#x27;: 5, &#x27;C0001 subscription plan&#x27;: &#x27;P499&#x27;}
+== T09 重複確認 200 {&#x27;request_id&#x27;: &#x27;R-7459DCA190A7&#x27;, &#x27;quote_id&#x27;: &#x27;Q-ACCEPT-1&#x27;, &#x27;old_plan_id&#x27;: &#x27;P499&#x27;, &#x27;new_plan_id&#x27;: &#x27;P699&#x27;, &#x27;status&#x27;: &#x27;PENDING&#x27;, &#x27;created_at&#x27;: &#x27;2026-11-03T11:34:18+08:00&#x27;, &#x27;already_existed&#x27;: True} {&#x27;C0001 requests&#x27;: [(&#x27;R-7459DCA190A7&#x27;, &#x27;Q-ACCEPT-1&#x27;, &#x27;PENDING&#x27;)], &#x27;all requests&#x27;: 5, &#x27;C0001 subscription plan&#x27;: &#x27;P499&#x27;}
+== E09 Reset 後 {&#x27;C0001 requests&#x27;: [], &#x27;all requests&#x27;: 4, &#x27;C0001 subscription plan&#x27;: &#x27;P499&#x27;}
 </pre>
 </section>
 
@@ -76,7 +79,7 @@ cat >> docs/report/report.html <<'EOF'
 <table>
 <tr><th>Which AI tools you used</th><td>Claude Code</td></tr>
 <tr><th>Where you used them</th><td>☑ In a console (a command-line tool)　☐ Inside VS Code　☐ In a web chat page　☐ Other tools</td></tr>
-<tr><th>About how many hours</th><td class="todo">【待填：實際開發工時，needs-info】</td></tr>
+<tr><th>About how many hours</th><td>約 3 小時</td></tr>
 <tr><th>What you used them for</th><td>規格與工單拆分、寫程式與測試、驗收（含瀏覽器與真模型）、修 Bug、整理文件。</td></tr>
 </table>
 <p><b>One problem and how I solved it:</b> 工單 06 的第一版 RAG 用本機嵌入模型。真模型驗收時 <code>search_policy</code> 回傳 INTERNAL_ERROR，最終回答「無法確認」，查到 transformers 缺少 <code>dependency_versions_table</code>，真嵌入測試因此被跳過。我改用課程提供的雲端 Embedding 服務，補上索引與校準設定綁定的檢查，重測後 10 項真嵌入測試通過，並重新驗收 Conversation 2。AI 在寫程式、測試與找出失敗點上幫助最大；它也曾把「確定性測試通過」寫成像真模型驗證，我要求改成明確分級並標示哪些沒有實測（例如 T07、T15 的真模型提示注入、60 秒逾時）。</p>
