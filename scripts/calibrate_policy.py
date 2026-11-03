@@ -11,6 +11,7 @@ import chromadb
 from backend.rag import config
 from backend.rag.embedder import CloudEmbedder
 from backend.rag.index import build_index
+from backend.rag.chunks import load_chunks
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,7 +51,12 @@ def main():
         print(f"\n正向『預期章節』最大距離 = {max(pos):.4f}")
         print(f"負向最近距離最小值       = {min(neg):.4f}")
         if max(pos) < min(neg):
-            print(f"建議閾值（兩者中點）     = {(max(pos) + min(neg)) / 2:.4f}")
+            distance = round((max(pos) + min(neg)) / 2, 4)
+            if not max(pos) <= distance < min(neg):
+                raise ValueError('校準距離間隔過小，四捨五入後無法安全分離')
+            print(f"建議閾值（兩者中點）     = {distance:.4f}")
+            index_id = config.calibration_id(emb, load_chunks(ROOT / 'knowledge'))
+            print(f"EMBEDDING_CALIBRATION_ID={config.calibration_token(index_id, distance)}")
         else:
             raise ValueError('正負向距離未分離，無法設定可靠閾值')
 

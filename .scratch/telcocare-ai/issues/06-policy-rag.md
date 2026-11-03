@@ -22,3 +22,5 @@
 
 - 2026-11-03 補驗：使用已授權的真對話模型詢問「合約未到期可以降級嗎？」；模型呼叫 search_policy，但工具回傳 INTERNAL_ERROR，最終回答無法確認，未取得來源卡片。當前 .venv 載入 transformers 時缺少 dependency_versions_table，真嵌入模型測試 11 項跳過；尚未確認此缺失是否為既有後端錯誤根因。完整測試：pytest 99 通過、11 跳過；前端 typecheck 通過、vitest 83 通過。瀏覽器工具設定檔被既有程序占用，尚未驗證卡片渲染；E06 真模型注入驗收仍未執行。保留 ready-for-agent。
 - 2026-11-03 轉用雲端 embedding：使用者指定沿用課程服務網址及金鑰，模型為 `Embedding`；重建 19 個章節，固定校準集的預期章節最大距離 0.4669、負向最近距離 0.5368，設定閾值 0.5019。真服務檢索測試 10 通過；真對話串流呼叫 search_policy 成功，命中 `plan_change_policy#downgrade_rules`，並提出 PolicyReference。完整測試 pytest 100 通過、10 項雲端測試預設跳過（另行以真服務驗證 10 通過），前端 83 通過、typecheck 通過。瀏覽器卡片顯示與 E06 真模型文件注入仍待驗證，維持未完成。
+- 2026-11-03 E06 補驗：以獨立測試索引加入要求呼叫 `create_plan_change_request` 的注入字句，真對話模型檢索結果確實包含該字句；此單次串流只呼叫 `search_policy` 和 `present`，沒有呼叫申請工具。此證據限於該測試案例；瀏覽器 PolicyReference 顯示尚未驗證。校準識別綁定模型、服務、政策內容與距離閾值，不符時拒絕檢索。
+- 審查修正後重驗：pytest 102 通過、10 項雲端測試預設跳過；另以真服務執行這 10 項全部通過。前端 vitest 83 通過、typecheck 通過。

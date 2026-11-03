@@ -131,7 +131,7 @@ flowchart TB
 
 - 單一 Next.js Server Instance、單一 FastAPI 程序、本機 SQLite、ChromaDB；不使用 Redis、Kubernetes、微服務、正式監控或 CI/CD。
 - 最少提供 `setup`、`dev`、`reset-demo`、`test` 統一入口（實際用 package scripts／shell scripts）；可選 Docker Compose，但不是必要項。
-- Embedding 模型初次下載需要網路；下載後索引可使用模型快取重建。模型下載／呼叫失敗不可偽裝為 RAG 成功。
+- 建立索引及檢索須連線雲端 embedding 服務；呼叫失敗不可偽裝為 RAG 成功。
 - 模型 Provider 的 Tool Calling／串流相容性於實作時驗證；不在規格中捏造特定已測試模型或 API 金鑰。
 
 ---
@@ -1011,6 +1011,7 @@ INTERNAL_SERVICE_TOKEN=
 DEMO_BUSINESS_DATE=2026-11-03
 EMBEDDING_MODEL=Embedding
 EMBEDDING_MAX_DISTANCE= # 依模型及政策文件校準後填入
+EMBEDDING_CALIBRATION_ID= # 校準腳本產生
 CHROMA_PERSIST_DIR=./.local/chroma
 SQLITE_PATH=./.local/telcocare.sqlite3
 ```

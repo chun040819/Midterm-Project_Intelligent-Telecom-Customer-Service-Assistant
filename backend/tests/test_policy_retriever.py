@@ -15,7 +15,7 @@ class FakeEmbedder:
     """字元 bigram 雜湊向量。"""
 
     model_name = "fake-embedder"
-    model_revision = "test"
+    model_origin = "test"
     max_tokens = 512
 
     def __init__(self, token_len=len):
@@ -85,6 +85,27 @@ def test_different_model_cannot_query_existing_index(chroma_path):
     emb.model_name = 'another-model'
     with pytest.raises(PolicySearchError, match='模型與索引不符'):
         PolicyRetriever(chroma_path, emb, max_distance=1.0).search('降級')
+
+
+def test_uncalibrated_index_cannot_be_queried(chroma_path, monkeypatch):
+    emb = FakeEmbedder()
+    build_index(KNOWLEDGE, chroma_path, emb)
+    monkeypatch.setenv('EMBEDDING_MAX_DISTANCE', '0.5')
+    monkeypatch.setenv('EMBEDDING_CALIBRATION_ID', 'outdated')
+    with pytest.raises(PolicySearchError, match='校準'):
+        PolicyRetriever(chroma_path, emb).search('降級')
+
+
+def test_calibration_does_not_accept_a_different_threshold(chroma_path, monkeypatch):
+    from backend.rag.chunks import load_chunks
+    from backend.rag.config import calibration_id, calibration_token
+
+    emb = FakeEmbedder()
+    build_index(KNOWLEDGE, chroma_path, emb)
+    monkeypatch.setenv('EMBEDDING_MAX_DISTANCE', '0.8')
+    monkeypatch.setenv('EMBEDDING_CALIBRATION_ID', calibration_token(calibration_id(emb, load_chunks(KNOWLEDGE)), 0.5))
+    with pytest.raises(PolicySearchError, match='校準'):
+        PolicyRetriever(chroma_path, emb).search('降級')
 
 
 def test_embedding_failure_is_not_disguised(chroma_path):

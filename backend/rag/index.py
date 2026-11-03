@@ -4,7 +4,7 @@ from pathlib import Path
 import chromadb
 
 from backend.rag.chunks import load_chunks
-from backend.rag.config import COLLECTION
+from backend.rag.config import COLLECTION, calibration_id
 
 
 class PolicyIndexError(RuntimeError):
@@ -29,7 +29,7 @@ def build_index(knowledge_dir: Path | str, chroma_path: str, embedder) -> int:
             client.delete_collection(COLLECTION)
         except Exception:
             pass
-        col = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine", "embedding_model": embedder.model_name, "embedding_origin": embedder.model_revision})
+        col = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine", "embedding_model": embedder.model_name, "embedding_origin": embedder.model_origin, "calibration_id": calibration_id(embedder, chunks)})
         col.add(
             ids=[c.chunk_id for c in chunks],
             embeddings=vectors,
@@ -43,7 +43,7 @@ def build_index(knowledge_dir: Path | str, chroma_path: str, embedder) -> int:
                     "section_title": c.section_title,
                     "source_path": c.source_path,
                     "content": c.content,
-                    "embedding_model_version": f"{embedder.model_name}@{embedder.model_revision}",
+                    "embedding_model_version": embedder.model_name,
                 }
                 for c in chunks
             ],

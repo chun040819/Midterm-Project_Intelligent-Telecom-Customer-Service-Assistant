@@ -13,7 +13,7 @@ class CloudEmbedder:
         self.model_name = model or os.environ.get('EMBEDDING_MODEL', '')
         if not self.base_url or not self.api_key or not self.model_name:
             raise ValueError('請設定 LLM_BASE_URL、LLM_API_KEY 與 EMBEDDING_MODEL')
-        self.model_revision = hashlib.sha256(self.base_url.encode()).hexdigest()
+        self.model_origin = hashlib.sha256(self.base_url.encode()).hexdigest()
         self.client = client or httpx.Client(timeout=60.0)
 
     def _embed(self, texts):

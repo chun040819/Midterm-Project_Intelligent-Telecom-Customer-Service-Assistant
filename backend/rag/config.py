@@ -1,8 +1,20 @@
 """政策檢索設定。距離閾值必須由目前使用的模型校準。"""
 import os
+import hashlib
+import json
 
 TOP_K = 3
 COLLECTION = 'policy'
+
+
+def calibration_id(embedder, chunks):
+    payload = [embedder.model_name, embedder.model_origin,
+               [(c.chunk_id, c.content) for c in chunks]]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()
+
+
+def calibration_token(index_id, distance):
+    return hashlib.sha256(f'{index_id}:{distance:.12g}'.encode()).hexdigest()
 
 
 def chroma_path():
