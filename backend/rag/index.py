@@ -4,7 +4,7 @@ from pathlib import Path
 import chromadb
 
 from backend.rag.chunks import load_chunks
-from backend.rag.config import COLLECTION, MAX_TOKENS
+from backend.rag.config import COLLECTION
 
 
 class PolicyIndexError(RuntimeError):
@@ -19,11 +19,6 @@ def build_index(knowledge_dir: Path | str, chroma_path: str, embedder) -> int:
         raise PolicyIndexError(f"讀取政策文件失敗：{e}") from e
     if not chunks:
         raise PolicyIndexError("knowledge 目錄沒有任何政策片段")
-    for c in chunks:
-        # 以與嵌入相同的 `passage: ` 前綴計算，確保真正送進模型的長度不超限。
-        n = embedder.count_tokens(f"passage: {c.content}")
-        if n > MAX_TOKENS:
-            raise PolicyIndexError(f"{c.chunk_id} 有 {n} tokens，超過 {MAX_TOKENS}")
     try:
         vectors = embedder.embed_passages([c.content for c in chunks])
     except Exception as e:
@@ -34,7 +29,7 @@ def build_index(knowledge_dir: Path | str, chroma_path: str, embedder) -> int:
             client.delete_collection(COLLECTION)
         except Exception:
             pass
-        col = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
+        col = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine", "embedding_model": embedder.model_name, "embedding_origin": embedder.model_revision})
         col.add(
             ids=[c.chunk_id for c in chunks],
             embeddings=vectors,

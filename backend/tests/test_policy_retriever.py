@@ -12,7 +12,7 @@ KNOWLEDGE = Path(__file__).resolve().parents[2] / "knowledge"
 
 
 class FakeEmbedder:
-    """字元 bigram 雜湊向量；記錄收到的文字以驗證 query/passage 前綴。"""
+    """字元 bigram 雜湊向量。"""
 
     model_name = "fake-embedder"
     model_revision = "test"
@@ -33,11 +33,11 @@ class FakeEmbedder:
         return [x / n for x in v]
 
     def embed_passages(self, texts):
-        self.seen += [f"passage: {t}" for t in texts]
+        self.seen += texts
         return [self._vec(t) for t in texts]
 
     def embed_query(self, text):
-        self.seen.append(f"query: {text}")
+        self.seen.append(text)
         return self._vec(text)
 
 
@@ -64,12 +64,11 @@ def test_threshold_filters_everything_when_too_strict(chroma_path):
     assert PolicyRetriever(chroma_path, emb, max_distance=0.0).search("你們有 5G 企業漫遊 8 折嗎") == []
 
 
-def test_passage_and_query_prefixes(chroma_path):
+def test_queries_use_original_text(chroma_path):
     emb = FakeEmbedder()
     build_index(KNOWLEDGE, chroma_path, emb)
     PolicyRetriever(chroma_path, emb, max_distance=2.0).search("流量用完")
-    assert all(s.startswith("passage: ") for s in emb.seen[:-1])
-    assert emb.seen[-1] == "query: 流量用完"
+    assert emb.seen[-1] == "流量用完"
 
 
 def test_rebuild_is_idempotent(chroma_path):
@@ -80,10 +79,12 @@ def test_rebuild_is_idempotent(chroma_path):
     assert len(PolicyRetriever(chroma_path, emb, max_distance=2.0).search("解約")) == 3
 
 
-def test_chunk_over_512_tokens_fails_loudly(chroma_path):
-    emb = FakeEmbedder(token_len=lambda t: 513)
-    with pytest.raises(PolicyIndexError, match="512"):
-        build_index(KNOWLEDGE, chroma_path, emb)
+def test_different_model_cannot_query_existing_index(chroma_path):
+    emb = FakeEmbedder()
+    build_index(KNOWLEDGE, chroma_path, emb)
+    emb.model_name = 'another-model'
+    with pytest.raises(PolicySearchError, match='模型與索引不符'):
+        PolicyRetriever(chroma_path, emb, max_distance=1.0).search('降級')
 
 
 def test_embedding_failure_is_not_disguised(chroma_path):

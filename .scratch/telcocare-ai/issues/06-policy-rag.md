@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [x] 建立規格定義的六份虛構政策及所有章節 ID，與 DB 定價、FastAPI 資格和業務範圍一致。
-- [x] 可重建 ChromaDB；固定 multilingual-e5-small 版本，正確使用 query／passage 前綴，依章節切片並檢查不超過 512 tokens，保留完整來源 metadata。
+- [x] 依使用者 2026-11-03 的變更，改用課程 OpenAI 相容服務的 `Embedding` 模型；可重建 ChromaDB，依章節切片並保留完整來源 metadata。輸入上限由服務驗證，錯誤如實回報。
 - [x] search_policy 使用 Top-K=3 與固定正負向問題校準並記錄閾值；模型下載、嵌入或索引失敗如實報錯。
 - [x] PolicyReference 與回答只引用實際存在的文件和章節；T14 命中降級規則，超額費用問題命中對應條款；E04 不捏造優惠或違約金。
 - [ ] E06 文件注入視為不可信資料，不能增加操作權限；具索引重建、檢索測試與真模型來源對照證據。
@@ -21,3 +21,4 @@
 - 2026-11-03 review-fixes：Status 由 resolved 改回 ready-for-agent，因真 LLM 往返與瀏覽器渲染尚未驗證；「真模型來源對照證據」項取消勾選，待有 LLM_API_KEY 時補驗。
 
 - 2026-11-03 補驗：使用已授權的真對話模型詢問「合約未到期可以降級嗎？」；模型呼叫 search_policy，但工具回傳 INTERNAL_ERROR，最終回答無法確認，未取得來源卡片。當前 .venv 載入 transformers 時缺少 dependency_versions_table，真嵌入模型測試 11 項跳過；尚未確認此缺失是否為既有後端錯誤根因。完整測試：pytest 99 通過、11 跳過；前端 typecheck 通過、vitest 83 通過。瀏覽器工具設定檔被既有程序占用，尚未驗證卡片渲染；E06 真模型注入驗收仍未執行。保留 ready-for-agent。
+- 2026-11-03 轉用雲端 embedding：使用者指定沿用課程服務網址及金鑰，模型為 `Embedding`；重建 19 個章節，固定校準集的預期章節最大距離 0.4669、負向最近距離 0.5368，設定閾值 0.5019。真服務檢索測試 10 通過；真對話串流呼叫 search_policy 成功，命中 `plan_change_policy#downgrade_rules`，並提出 PolicyReference。完整測試 pytest 100 通過、10 項雲端測試預設跳過（另行以真服務驗證 10 通過），前端 83 通過、typecheck 通過。瀏覽器卡片顯示與 E06 真模型文件注入仍待驗證，維持未完成。

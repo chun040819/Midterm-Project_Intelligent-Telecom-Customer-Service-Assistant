@@ -248,9 +248,9 @@ def create_app(
             return policy_retriever
         if "r" not in lazy:  # 延遲載入，避免未使用 RAG 時啟動就載入模型
             try:
-                from backend.rag.embedder import E5Embedder
+                from backend.rag.embedder import CloudEmbedder
 
-                lazy["r"] = PolicyRetriever(rag_config.chroma_path(), E5Embedder())
+                lazy["r"] = PolicyRetriever(rag_config.chroma_path(), CloudEmbedder())
             except Exception as e:
                 raise PolicySearchError(f"嵌入模型載入失敗：{e}") from e
         return lazy["r"]

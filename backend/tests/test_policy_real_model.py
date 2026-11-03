@@ -1,13 +1,10 @@
-"""真模型（intfloat/multilingual-e5-small）驗證：來源對照、512 token、校準閾值。
-
-模型無法載入（無網路／未快取）時整檔 skip，並明確寫出原因，不當作通過。
-"""
+"""明確啟用時，以雲端 embedding 驗證政策來源。"""
+import os
 from pathlib import Path
 
 import pytest
 
 from backend.rag import config
-from backend.rag.chunks import load_chunks
 from backend.rag.index import build_index
 from backend.rag.retriever import PolicyRetriever
 
@@ -16,12 +13,10 @@ KNOWLEDGE = Path(__file__).resolve().parents[2] / "knowledge"
 
 @pytest.fixture(scope="module")
 def embedder():
-    try:
-        from backend.rag.embedder import E5Embedder
-
-        return E5Embedder()
-    except Exception as e:  # noqa: BLE001
-        pytest.skip(f"真模型無法載入，未驗證：{e}")
+    if os.environ.get('RUN_CLOUD_EMBEDDING_TESTS') != '1':
+        pytest.skip('未啟用雲端 embedding 測試')
+    from backend.rag.embedder import CloudEmbedder
+    return CloudEmbedder()
 
 
 @pytest.fixture(scope="module")
@@ -33,11 +28,6 @@ def retriever(embedder, tmp_path_factory):
 
 def refs(matches):
     return [f"{m['document_id']}#{m['section_id']}" for m in matches]
-
-
-def test_every_chunk_within_512_tokens(embedder):
-    for c in load_chunks(KNOWLEDGE):
-        assert embedder.count_tokens(f"passage: {c.content}") <= 512, c.chunk_id
 
 
 @pytest.mark.parametrize(
@@ -61,5 +51,3 @@ def test_negative_questions_find_nothing(retriever, query):
     assert retriever.search(query) == []  # E04：不捏造優惠
 
 
-def test_threshold_is_calibrated():
-    assert config.MAX_DISTANCE == 0.14

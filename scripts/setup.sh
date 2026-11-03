@@ -10,4 +10,5 @@ if [ ! -f .env ]; then
   sed -i.bak "s/^INTERNAL_SERVICE_TOKEN=.*/INTERNAL_SERVICE_TOKEN=$(openssl rand -hex 24)/" .env && rm -f .env.bak
   echo "已建立 .env；請填入 LLM_API_KEY。"
 fi
-./scripts/reset-demo.sh
+.venv/bin/python -m backend.db.seed
+echo "政策索引需設定 embedding 後執行 .venv/bin/python -m backend.rag.build_index；此操作會傳送政策至模型服務。"

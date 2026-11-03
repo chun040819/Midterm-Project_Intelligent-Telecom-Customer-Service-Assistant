@@ -103,7 +103,7 @@
 | FastAPI | `POST /internal/tools/{name}`，Tool Input 驗證、業務規則、SQLite、RAG 檢索、DB Transaction |
 | SQLite | 6 張核心資料表、固定 Seed、唯一鍵／外鍵／CHECK／部分唯一索引 |
 | ChromaDB | 六份 Markdown 政策文件的向量索引 |
-| Embedding | `intfloat/multilingual-e5-small`，本地執行；`query:` / `passage:` 前綴 |
+| Embedding | OpenAI-compatible 雲端 embedding；沿用 LLM 服務與金鑰，模型由環境設定 |
 | LLM | 一個經測試具 Tool Calling + Streaming 能力的 OpenAI-compatible 模型；環境變數設定，不建立模型切換 UI |
 
 ```mermaid
@@ -114,7 +114,7 @@ flowchart TB
     F --> DB[(SQLite)]
     F --> R[RAG Retriever]
     R --> C[(ChromaDB)]
-    R --> E[Local multilingual-e5-small]
+    R --> E[Cloud embedding API]
 ```
 
 **正確責任界線**：LLM 只提出工具參數、輸出文字與受限 UI 樹。Next.js 將八個業務／檢索工具的呼叫委派 FastAPI，並在取得經驗證的結果後快取／建立 `data_ref`。FastAPI 不負責呼叫 LLM 或保存聊天歷史；Browser 不直接呼叫 FastAPI。`present` 在**瀏覽器**解析元件，其結果需透過 Runtime 回送以繼續模型流程。前端事件不能直接取得 SQLite 或 LLM API Key。
@@ -701,8 +701,8 @@ X-Demo-Customer-Id: C0001
 
 ### 8.2 建索引與查詢
 
-1. 初始化腳本讀取 `knowledge/*.md`，依 Markdown heading／條款優先切片；目標片段約 **300–500 個中文字元**，以 tokenizer 真正檢查不超過 **512 tokens**（必要時縮小片段）。
-2. Embedding 固定使用 `intfloat/multilingual-e5-small`；索引端對片段使用 `passage: ` 前綴，查詢端使用 `query: ` 前綴；模型版本固定並記錄於環境／README。
+1. 初始化腳本讀取 `knowledge/*.md`，依 Markdown heading／條款優先切片；以模型服務的輸入限制為準，服務拒絕超長片段時如實報錯。
+2. Embedding 使用 `EMBEDDING_MODEL`，索引及查詢使用同一模型與 API；變更模型或服務須重建索引並重新校準。索引與查詢會將政策內容及問題傳至該服務。
 3. 儲存 ChromaDB：`chunk_id`、`document_id`、`title`、`section_id`、`section_title`、`source_path`、`content`、`embedding_model_version`。
 4. 使用者提出政策問題 → `search_policy` → query embedding → ChromaDB 檢索 Top-K=3 → 相關性篩選 → 結構化 `SearchPolicyResult`。
 5. 使用固定的正向／負向政策問題校準距離閾值；**不得任意假定一個未經校準的相似度閾值**。閾值值可在實作階段記錄於設定檔，不構成新的產品決策。
@@ -1009,7 +1009,8 @@ LLM_MODEL=
 FASTAPI_BASE_URL=http://127.0.0.1:8000
 INTERNAL_SERVICE_TOKEN=
 DEMO_BUSINESS_DATE=2026-11-03
-EMBEDDING_MODEL=intfloat/multilingual-e5-small
+EMBEDDING_MODEL=Embedding
+EMBEDDING_MAX_DISTANCE= # 依模型及政策文件校準後填入
 CHROMA_PERSIST_DIR=./.local/chroma
 SQLITE_PATH=./.local/telcocare.sqlite3
 ```
@@ -1073,7 +1074,7 @@ SQLITE_PATH=./.local/telcocare.sqlite3
 
 1. 選用的 OpenAI-compatible 模型能否可靠支援多步 Tool Calling 與 Streaming，及其模型名稱／API Endpoint。
 2. Next.js、assistant-ui、`@assistant-ui/generative-ui`、AI SDK 的**相容版本及 `present` 的工具續接**。
-3. ChromaDB／multilingual-e5-small 的可重現環境及 RAG 相關性閾值，依固定測試問題校準。
+3. ChromaDB／雲端 embedding 的可重現環境及 RAG 相關性閾值，依固定測試問題校準。
 4. 課程實際截止日、報告中的真實開發工時、實際 GitHub URL 與**實作後**的真實截圖。
 
 這四類是**查證／實作結果**而不是等待使用者重新選擇的產品方向。若相容性問題導致必須改變已確認技術選型或業務規則，應提出變更提案供使用者同意，而不是靜默修改此規格。
@@ -1094,6 +1095,6 @@ SQLITE_PATH=./.local/telcocare.sqlite3
 - assistant-ui Tool UI：<https://www.assistant-ui.com/docs/tools/tool-ui>
 - assistant-ui Tools：<https://www.assistant-ui.com/docs/tools>
 - Vercel AI SDK Tool Calling：<https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling>
-- multilingual-e5-small Model Card：<https://huggingface.co/intfloat/multilingual-e5-small>
+- OpenAI embeddings API：<https://developers.openai.com/api/reference/resources/embeddings/methods/create>
 
 > **交付限制再次確認：本文件為已確認的設計規格，不等於已建立可執行系統。後續只有使用者明確要求，才開始 P0–P8 應用程式開發、資料建置、測試或 GitHub 操作。**

@@ -14,12 +14,15 @@ class PolicyRetriever:
     def __init__(self, chroma_path: str, embedder, max_distance: float | None = None, top_k: int = config.TOP_K):
         self._path = chroma_path
         self._embedder = embedder
-        self._max_distance = config.MAX_DISTANCE if max_distance is None else max_distance
+        self._max_distance = config.max_distance() if max_distance is None else max_distance
         self._top_k = top_k
 
     def search(self, query: str) -> list[dict]:
         try:
             col = chromadb.PersistentClient(path=self._path).get_collection(config.COLLECTION)
+            metadata = col.metadata or {}
+            if metadata.get('embedding_model') != self._embedder.model_name or metadata.get('embedding_origin') != self._embedder.model_revision:
+                raise ValueError('嵌入模型與索引不符，請重建索引')
         except Exception as e:
             raise PolicySearchError(f"政策索引不存在或無法開啟，請先重建索引：{e}") from e
         try:

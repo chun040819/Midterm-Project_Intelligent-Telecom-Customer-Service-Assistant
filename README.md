@@ -12,13 +12,14 @@ Node 22+、[uv](https://docs.astral.sh/uv/)、一組 OpenAI-compatible 且支援
 
 ```bash
 ./scripts/setup.sh        # 安裝依賴、建立 .env、以固定 Seed 建 SQLite
-# 編輯 .env：填入 LLM_API_KEY（LLM_BASE_URL／LLM_MODEL 已預設為課程 NKUST Furen-large）
+# 編輯 .env：填入 LLM_API_KEY、EMBEDDING_MODEL 及校準後的 EMBEDDING_MAX_DISTANCE
+set -a; . ./.env; set +a; .venv/bin/python -m backend.rag.build_index  # 政策內容會傳送至 LLM_BASE_URL
 ./scripts/dev.sh          # FastAPI 127.0.0.1:8000 + Next.js 127.0.0.1:3000
 ```
 
 Next.js 需讀到根目錄 `.env`：`dev.sh` 已匯出；若單獨執行 `npm run dev`，請在 `frontend/` 放一個指向 `../.env` 的 `.env.local`。
 
-其他入口：`./scripts/reset-demo.sh`（還原 Seed；記憶體 Session 需重啟 dev）、`./scripts/test.sh`。
+其他入口：`./scripts/reset-demo.sh`（還原 Seed 並將政策傳至雲端以重建索引；記憶體 Session 需重啟 dev）、`./scripts/test.sh`。
 
 ## 架構重點
 
@@ -34,7 +35,7 @@ Next 16.4.4、React 19.3.1、ai 7.0.159、@ai-sdk/openai-compatible 3.0.82、@as
 ## 模型固定版本
 
 - 對話模型：`Furen-large`（`.env` 的 `LLM_MODEL`，課程 NKUST AI Hub 託管）。
-- RAG 嵌入模型：`intfloat/multilingual-e5-small`，revision `614241f622f53c4eeff9890bdc4f31cfecc418b3`（`backend/rag/config.py`）；換版須重跑 `python -m scripts.calibrate_policy` 並更新 `MAX_DISTANCE`。
+- RAG 嵌入模型：`EMBEDDING_MODEL`（課程服務目前使用 `Embedding`），沿用 `LLM_BASE_URL` 和 `LLM_API_KEY`。建索引會傳送政策文件，檢索會傳送問題至該服務。切換模型、服務或政策文件後，執行 `set -a; . ./.env; set +a; .venv/bin/python -m scripts.calibrate_policy`，確認正負向距離可分後設定 `EMBEDDING_MAX_DISTANCE` 並重建索引。索引與模型不符會報錯。
 - 固定業務判定日：`.env` 的 `DEMO_BUSINESS_DATE`（預設 2026-11-03），為 FastAPI 唯一來源。
 
 ## 尚未驗證

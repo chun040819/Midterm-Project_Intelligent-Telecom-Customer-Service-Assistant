@@ -1,7 +1,7 @@
 """以固定正負向問題校準 search_policy 距離閾值（SPEC §8.2-5）。
 
 用法：.venv/bin/python scripts/calibrate_policy.py
-需要真的 multilingual-e5-small（首次需網路下載）。輸出每題最佳距離與建議閾值。
+使用設定的雲端 embedding 模型。輸出每題最佳距離與建議閾值。
 """
 import tempfile
 from pathlib import Path
@@ -9,7 +9,7 @@ from pathlib import Path
 import chromadb
 
 from backend.rag import config
-from backend.rag.embedder import E5Embedder
+from backend.rag.embedder import CloudEmbedder
 from backend.rag.index import build_index
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +34,7 @@ CASES = [
 
 
 def main():
-    emb = E5Embedder()
+    emb = CloudEmbedder()
     with tempfile.TemporaryDirectory() as tmp:
         build_index(ROOT / "knowledge", tmp, emb)
         col = chromadb.PersistentClient(path=tmp).get_collection(config.COLLECTION)
@@ -49,7 +49,10 @@ def main():
                 neg.append(dists[0])
         print(f"\n正向『預期章節』最大距離 = {max(pos):.4f}")
         print(f"負向最近距離最小值       = {min(neg):.4f}")
-        print(f"建議閾值（兩者中點）     = {(max(pos) + min(neg)) / 2:.4f}")
+        if max(pos) < min(neg):
+            print(f"建議閾值（兩者中點）     = {(max(pos) + min(neg)) / 2:.4f}")
+        else:
+            raise ValueError('正負向距離未分離，無法設定可靠閾值')
 
 
 if __name__ == "__main__":
