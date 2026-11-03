@@ -59,7 +59,7 @@ export async function executeReadTool(
   }
   let envelope = await callInternalTool(name, parsed.data, session.customerId, deps);
   // 只讀工具可重試一次（SPEC §10.1）
-  if (envelope.status === "error" && envelope.error.code === "INTERNAL_ERROR") {
+  if (envelope.status === "error" && envelope.error.code === "INTERNAL_ERROR" && !deps?.signal?.aborted) {
     envelope = await callInternalTool(name, parsed.data, session.customerId, deps);
   }
   if (name === "estimate_plan_change" && envelope.status === "success") {

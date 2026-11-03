@@ -428,7 +428,11 @@ def create_app(
                 args = model.model_validate(payload)
             except (ValidationError, ValueError):
                 return error_response(422, "VALIDATION_ERROR", "工具參數無效。")
-            return await run_in_threadpool(handler, conn, customer_id, args)
+            try:
+                return await run_in_threadpool(handler, conn, customer_id, args)
+            except Exception:
+                # SPEC §6.4：非 2xx 也必須是 Envelope；不外洩例外內容，也不假稱成功。
+                return error_response(500, "INTERNAL_ERROR", "目前系統無法完成這項操作，請稍後再試。")
         finally:
             conn.close()
 

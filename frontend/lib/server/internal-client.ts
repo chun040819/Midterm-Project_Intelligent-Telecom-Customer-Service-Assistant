@@ -12,7 +12,10 @@ function isEnvelope(value: unknown): value is ToolEnvelope<unknown> {
   return v.status === "success" || (v.status === "error" && typeof v.error === "object" && v.error !== null);
 }
 
-type Deps = { fetch?: FetchLike; baseUrl?: string; token?: string };
+/** 單次內部呼叫上限；整輪預算由 signal 負責取消。 */
+const INTERNAL_TIMEOUT_MS = 15_000;
+
+type Deps = { fetch?: FetchLike; baseUrl?: string; token?: string; timeoutMs?: number; signal?: AbortSignal };
 
 /** Next.js Server → FastAPI。身分標頭只由這裡依 Session 產生，絕不採用 Browser／模型提供的值。 */
 export function callInternalTool(
@@ -40,9 +43,13 @@ async function post(
   customerId: string,
   deps: Deps,
 ): Promise<ToolEnvelope<unknown>> {
+  // 整輪預算已用完：禁止再派送新的內部請求。
+  if (deps.signal?.aborted) return errorEnvelope("INTERNAL_ERROR", "目前系統無法完成這項操作，請稍後再試。");
   const doFetch = deps.fetch ?? fetch;
   const baseUrl = deps.baseUrl ?? process.env.FASTAPI_BASE_URL ?? "http://127.0.0.1:8000";
   const token = deps.token ?? process.env.INTERNAL_SERVICE_TOKEN ?? "";
+  const timeout = AbortSignal.timeout(deps.timeoutMs ?? INTERNAL_TIMEOUT_MS);
+  const signal = deps.signal ? AbortSignal.any([deps.signal, timeout]) : timeout;
   try {
     const res = await doFetch(`${baseUrl}${path}`, {
       method: "POST",
@@ -53,6 +60,7 @@ async function post(
       },
       body: JSON.stringify(payload),
       cache: "no-store",
+      signal,
     });
     const body: unknown = await res.json().catch(() => null);
     // 非 2xx 也應是 Envelope（SPEC §6.4）；格式不符一律視為內部錯誤，不推測成功。
