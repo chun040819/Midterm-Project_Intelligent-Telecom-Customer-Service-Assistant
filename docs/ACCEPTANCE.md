@@ -19,7 +19,7 @@
 | T04 | Pass | `test_get_my_usage.py::test_t04_no_november_data` |
 | T05 | Pass | `backend/tests/test_list_plans.py`、`frontend/tests/plan-view.test.ts` |
 | T06 | Pass | `test_estimate_plan_change.py::test_t06…`；真模型截圖 `01-quote-card.jpg`（P499→P699、+200、有效期限、確認／取消） |
-| T07 | Pass | `frontend/tests/plan-change.test.ts`（無確認不寫入）；`db-evidence.txt` 確認前 C0001 無申請 |
+| T07 | Pass（確定性） | `frontend/tests/plan-change.test.ts`（模型直接寫入回 `CONFIRMATION_REQUIRED`、不寫入）；`db-evidence.txt` 僅證明 estimate 不寫入。真模型嘗試直接寫入未另做截圖 |
 | T08 | Pass | `test_confirm_plan_change.py::test_t08…`；真模型 UI 點確認後 DB 4→5 筆、C0001 恰一筆 PENDING、訂閱仍 P499、`02-confirmed-pending.jpg` |
 | T09 | Pass | `test_t09…`；`db-evidence.txt` 重複確認回同 request_id、`already_existed=True`、總數仍 5 |
 | T10 | Pass | `test_estimate_plan_change.py::test_t10…` |
