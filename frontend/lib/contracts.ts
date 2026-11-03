@@ -37,10 +37,15 @@ export const BillResultSchema = z.object({
 
 export type BillResult = z.infer<typeof BillResultSchema>;
 
+export const PlansResultSchema = z.object({ plans: z.array(PlanSchema) });
+
+export type PlansResult = z.infer<typeof PlansResultSchema>;
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
   get_my_bill: z.object({ billing_month: MonthSchema.optional() }).strict(),
+  list_plans: z.object({ max_monthly_fee: z.number().int().nonnegative().optional() }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

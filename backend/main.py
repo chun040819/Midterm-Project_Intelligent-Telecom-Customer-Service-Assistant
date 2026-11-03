@@ -76,8 +76,36 @@ def get_my_bill(conn: sqlite3.Connection, customer_id: str, args: BillArguments)
     )
 
 
+class PlansArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 預設值不經驗證；明確傳入 null、負數、小數、字串或布林仍會被拒絕。
+    max_monthly_fee: Annotated[int, Field(ge=0, strict=True)] = None  # type: ignore[assignment]
+
+
+def list_plans(conn: sqlite3.Connection, _customer_id: str, args: PlansArguments):
+    ceiling = args.max_monthly_fee
+    rows = conn.execute(
+        """SELECT plan_id, name, monthly_fee, data_limit_gb, voice_minutes, is_active
+           FROM plans WHERE is_active = 1 AND (? IS NULL OR monthly_fee <= ?)
+           ORDER BY monthly_fee, plan_id""",
+        (ceiling, ceiling),
+    ).fetchall()
+    return success(
+        {
+            "plans": [
+                {
+                    "plan_id": pid, "name": name, "monthly_fee": fee,
+                    "data_limit_gb": gb, "voice_minutes": mins, "is_active": bool(active),
+                }
+                for pid, name, fee, gb, mins, active in rows
+            ]
+        }
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
 TOOLS = {
+    "list_plans": (PlansArguments, list_plans),
     "get_my_subscription": (NoArguments, get_my_subscription),
     "get_my_bill": (BillArguments, get_my_bill),
 }

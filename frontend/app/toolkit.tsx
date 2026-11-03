@@ -8,6 +8,8 @@ import {
   defineGenerativeComponents,
 } from "@assistant-ui/generative-ui/react";
 import { BillCard } from "@/components/telcocare-genui/BillCard";
+import { PlanChart } from "@/components/telcocare-genui/PlanChart";
+import { PlanComparison } from "@/components/telcocare-genui/PlanComparison";
 import { SubscriptionCard } from "@/components/telcocare-genui/SubscriptionCard";
 
 const generative = new JSONGenerativeUI({
@@ -18,6 +20,23 @@ const generative = new JSONGenerativeUI({
         description: "顯示目前訂閱方案。data_ref 必須是 get_my_subscription 工具結果中的 data_ref；不要自行填寫任何方案數字。",
         properties: z.object({ data_ref: z.string().describe("get_my_subscription 結果的 data_ref") }),
         render: (props) => <SubscriptionCard data_ref={props.data_ref} />,
+      },
+      PlanComparison: {
+        description: "顯示有效資費比較表。data_ref 必須是 list_plans 工具結果中的 data_ref；selected_plan_ids 只能從該結果已返回的方案中挑選；不要自行填寫任何價格或流量。",
+        properties: z.object({
+          data_ref: z.string().describe("list_plans 結果的 data_ref"),
+          selected_plan_ids: z.array(z.string()).optional(),
+        }),
+        render: (props) => <PlanComparison data_ref={props.data_ref} selected_plan_ids={props.selected_plan_ids} />,
+      },
+      PlanChart: {
+        description: "顯示資費長條圖。data_ref 必須是 list_plans 工具結果中的 data_ref；metric 為 monthly_fee（月租）或 data_limit_gb（流量）；selected_plan_ids 只能從已返回的方案中挑選。",
+        properties: z.object({
+          data_ref: z.string().describe("list_plans 結果的 data_ref"),
+          metric: z.enum(["monthly_fee", "data_limit_gb"]),
+          selected_plan_ids: z.array(z.string()).optional(),
+        }),
+        render: (props) => <PlanChart data_ref={props.data_ref} metric={props.metric} selected_plan_ids={props.selected_plan_ids} />,
       },
       BillCard: {
         description: "顯示月份帳單。data_ref 必須是 get_my_bill 工具結果中的 data_ref；不要自行填寫月份、金額、到期日或繳費狀態。",

@@ -58,4 +58,6 @@ export const RUNTIME_ADDENDUM = `
 - 工具結果會附帶 data_ref。呈現卡片時呼叫 present，節點只填 data_ref（例如 {"_type":"SubscriptionCard","data_ref":"<工具結果的 data_ref>"}）；金額、日期、方案資料由伺服器解析，不可自行填寫。
 - 查詢目前方案時，先呼叫 get_my_subscription，再用 present 顯示 SubscriptionCard，最後用文字簡述。
 - 查詢帳單時，先呼叫 get_my_bill（billing_month 格式 YYYY-MM，使用者未指定月份就省略，不要自行猜測月份），再用 present 顯示 BillCard（例如 {"_type":"BillCard","data_ref":"<工具結果的 data_ref>"}），文字中必須說明工具結果實際的 billing_month。查無資料時只回固定句型，不借用其他月份。
+- 比較或查詢資費時，先呼叫 list_plans（使用者提到預算才帶 max_monthly_fee，必須是非負整數），再用 present 顯示 PlanComparison 與 PlanChart（例如 {"_type":"PlanComparison","data_ref":"<list_plans 的 data_ref>","selected_plan_ids":["P499","P699"]}、{"_type":"PlanChart","data_ref":"<同一個 data_ref>","metric":"monthly_fee"}）。selected_plan_ids 只能選 list_plans 已返回的方案；metric 為 monthly_fee 或 data_limit_gb。無符合方案時直接用文字說明，不顯示表圖。
+- 多輪追問（例如「那 P699 比我現在貴多少？」）時，沿用上一輪提到的目標方案；需要差額時先呼叫 get_my_subscription 取得目前月租，再用工具結果的 monthly_fee 相減，不可憑記憶或猜測數字，並寫出兩個方案的月租與差額。
 `;

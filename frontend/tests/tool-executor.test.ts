@@ -149,3 +149,40 @@ describe("executeReadTool(get_my_bill)", () => {
     expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "NOT_FOUND" } });
   });
 });
+
+describe("executeReadTool(list_plans)", () => {
+  const p = (plan_id: string, monthly_fee: number, data_limit_gb: number) => ({
+    plan_id, name: plan_id, monthly_fee, data_limit_gb, voice_minutes: 80, is_active: true,
+  });
+  const plans = { status: "success", data: { plans: [p("P499", 499, 25), p("P699", 699, 60)] }, error: null };
+
+  it("可省略 max_monthly_fee，並回傳可信 data_ref", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(plans));
+    const result = await executeReadTool(session, "list_plans", {}, { fetch, baseUrl: "http://internal", token: "tok" });
+    expect(calls[0].url).toBe("http://internal/internal/tools/list_plans");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: {} });
+    expect(resolveDataRef(session, result.data_ref!)?.envelope).toEqual(plans);
+  });
+
+  it("max_monthly_fee 原樣轉送；空清單仍是 success 並有 data_ref", async () => {
+    const session = createSession();
+    const empty = { status: "success", data: { plans: [] }, error: null };
+    const { fetch, calls } = fakeFetch(() => json(empty));
+    const result = await executeReadTool(session, "list_plans", { max_monthly_fee: 100 }, { fetch });
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: { max_monthly_fee: 100 } });
+    expect(result.status).toBe("success");
+    expect(result.data_ref).toMatch(/^ref_/);
+  });
+
+  it.each([{ max_monthly_fee: -1 }, { max_monthly_fee: 1.5 }, { max_monthly_fee: "499" }, { max_monthly_fee: null }, { customer_id: "C0002" }])(
+    "無效輸入 %j 被拒且不發出請求",
+    async (args) => {
+      const session = createSession();
+      const { fetch, calls } = fakeFetch(() => json(plans));
+      const result = await executeReadTool(session, "list_plans", args, { fetch });
+      expect(calls).toHaveLength(0);
+      expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "VALIDATION_ERROR" } });
+    },
+  );
+});
