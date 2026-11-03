@@ -312,8 +312,35 @@ def find_plan_change_request(conn: sqlite3.Connection, customer_id: str, args: L
     return success(_created(existing, True))
 
 
+class StatusArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 預設值不經驗證；明確傳入 null、空字串或過長字串仍會被拒絕。
+    request_id: Annotated[str, Field(min_length=1, max_length=100, strict=True)] = None  # type: ignore[assignment]
+
+
+def get_plan_change_status(conn: sqlite3.Connection, customer_id: str, args: StatusArguments):
+    """只讀；永遠限定目前客戶。他人或不存在的 request_id 回同一個 NOT_FOUND，不區分。"""
+    if args.request_id is None:
+        where, params = "customer_id = ?", (customer_id,)
+    else:
+        where, params = "customer_id = ? AND request_id = ?", (customer_id, args.request_id)
+    row = conn.execute(
+        "SELECT request_id, old_plan_id, new_plan_id, status, created_at FROM plan_change_requests "
+        f"WHERE {where} ORDER BY created_at DESC, request_id DESC LIMIT 1",
+        params,
+    ).fetchone()
+    if row is None:
+        return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
+    request_id, old_plan, new_plan, status, created_at = row
+    return success(
+        {"request_id": request_id, "old_plan_id": old_plan, "new_plan_id": new_plan,
+         "status": status, "created_at": created_at}
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
 TOOLS = {
+    "get_plan_change_status": (StatusArguments, get_plan_change_status),
     "create_plan_change_request": (CreateRequestArguments, create_plan_change_request),
     "estimate_plan_change": (EstimateArguments, estimate_plan_change),
     "list_plans": (PlansArguments, list_plans),

@@ -234,3 +234,53 @@ describe("executeReadTool(get_my_usage)", () => {
     expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "NOT_FOUND" } });
   });
 });
+
+describe("executeReadTool(get_plan_change_status)", () => {
+  const status = {
+    status: "success",
+    data: { request_id: "R-SEED-004", old_plan_id: "P499", new_plan_id: "P699", status: "PENDING", created_at: "2026-11-01T10:00:00+08:00" },
+    error: null,
+  };
+
+  it("可省略 request_id，以 session 客戶轉送並回傳可信 data_ref", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(status));
+    const result = await executeReadTool(session, "get_plan_change_status", {}, { fetch, baseUrl: "http://internal", token: "tok" });
+    expect(calls[0].url).toBe("http://internal/internal/tools/get_plan_change_status");
+    expect((calls[0].init.headers as Record<string, string>)["X-Demo-Customer-Id"]).toBe("C0001");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: {} });
+    expect(result.status).toBe("success");
+    expect(resolveDataRef(session, result.data_ref!)?.envelope).toEqual(status);
+  });
+
+  it("request_id 原樣轉送；customer_id 或空 ID 被拒且不發出請求", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(status));
+    await executeReadTool(session, "get_plan_change_status", { request_id: "R-SEED-004" }, { fetch });
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: { request_id: "R-SEED-004" } });
+    for (const bad of [{ customer_id: "C0002" }, { request_id: "" }, { request_id: "x".repeat(101) }]) {
+      const r = await executeReadTool(session, "get_plan_change_status", bad, { fetch });
+      expect(r.status === "error" && r.error.code).toBe("VALIDATION_ERROR");
+    }
+    expect(calls).toHaveLength(1);
+  });
+
+  it("NOT_FOUND 原樣回傳且不產生 data_ref", async () => {
+    const session = createSession();
+    const nf = { status: "error", data: null, error: { code: "NOT_FOUND", message: "目前查詢不到符合條件的資料，請確認查詢條件。" } };
+    const { fetch } = fakeFetch(() => json(nf, 404));
+    const r = await executeReadTool(session, "get_plan_change_status", {}, { fetch });
+    expect(r).toEqual({ ...nf, data_ref: null });
+  });
+});
+
+describe("get_plan_change_status 與客戶隔離", () => {
+  it("切換客戶後，舊客戶的申請狀態 data_ref 失效", async () => {
+    const session = createSession();
+    const body = { status: "success", data: { request_id: "R-SEED-004", old_plan_id: "P499", new_plan_id: "P699", status: "PENDING", created_at: "2026-11-01T10:00:00+08:00" }, error: null };
+    const { fetch } = fakeFetch(() => json(body));
+    const r = await executeReadTool(session, "get_plan_change_status", {}, { fetch });
+    switchCustomer(session, "C0002");
+    expect(resolveDataRef(session, r.data_ref!)).toBeUndefined();
+  });
+});

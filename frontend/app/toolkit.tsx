@@ -52,9 +52,17 @@ const generative = new JSONGenerativeUI({
         render: (props) => <PolicyReference source_refs={props.source_refs} />,
       },
       PlanChangeCard: {
-        description: "顯示方案變更確認卡片（舊新方案、月租差額、政策提醒、確認／取消按鈕）。quote_ref 必須是 estimate_plan_change 成功且 eligible=true 時回傳的 quote_id；不合格或無 quote_id 時不要使用。不要自行填寫任何數字，也不要代替使用者確認。",
-        properties: z.object({ quote_ref: z.string().describe("estimate_plan_change 結果的 quote_id") }),
-        render: (props) => <PlanChangeCard quote_ref={props.quote_ref} />,
+        description: "顯示方案變更卡片。確認情境：quote_ref 必須是 estimate_plan_change 成功且 eligible=true 時回傳的 quote_id（含舊新方案、月租差額、確認／取消按鈕）。狀態情境：request_ref 必須是 get_plan_change_status 工具結果中的 data_ref（只顯示申請編號、舊新方案、狀態與建立時間，無任何操作）。兩者擇一，不可同時填寫；不要自行填寫任何數字或狀態，也不要代替使用者確認。",
+        properties: z.object({
+          quote_ref: z.string().optional().describe("estimate_plan_change 結果的 quote_id"),
+          request_ref: z.string().optional().describe("get_plan_change_status 結果的 data_ref"),
+        }),
+        render: (props) =>
+          props.request_ref && !props.quote_ref
+            ? <PlanChangeCard request_ref={props.request_ref} />
+            : props.quote_ref && !props.request_ref
+              ? <PlanChangeCard quote_ref={props.quote_ref} />
+              : <PlanChangeCard />,
       },
       UsageCard: {
         description: "顯示月份流量與語音用量進度。data_ref 必須是 get_my_usage 工具結果中的 data_ref；不要自行填寫月份、額度、用量或剩餘／超額數字。",

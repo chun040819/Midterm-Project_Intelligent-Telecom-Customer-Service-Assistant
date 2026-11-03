@@ -96,6 +96,16 @@ export const PlanChangeCreatedSchema = z.object({
 
 export type PlanChangeCreated = z.infer<typeof PlanChangeCreatedSchema>;
 
+export const PlanChangeStatusSchema = z.object({
+  request_id: z.string().min(1),
+  old_plan_id: z.string(),
+  new_plan_id: z.string(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
+  created_at: z.string(),
+});
+
+export type PlanChangeStatus = z.infer<typeof PlanChangeStatusSchema>;
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
@@ -105,6 +115,7 @@ export const toolInputSchemas = {
   get_my_usage: z.object({ month: MonthSchema.optional() }).strict(),
   estimate_plan_change: z.object({ new_plan_id: z.string().regex(/^P[0-9]{3}$/) }).strict(),
   create_plan_change_request: z.object({ quote_id: z.string().min(1).max(100) }).strict(),
+  get_plan_change_status: z.object({ request_id: z.string().min(1).max(100).optional() }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

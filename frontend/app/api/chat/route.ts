@@ -56,6 +56,11 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.create_plan_change_request,
       execute: async (args) => executeReadTool(session, "create_plan_change_request", args),
     }),
+    get_plan_change_status: tool({
+      description: "查詢目前客戶本人的方案變更申請狀態（PENDING 待審、APPROVED 已核准、REJECTED 已拒絕）。request_id 可省略，省略時查最新一筆；查無或不屬於目前客戶回 NOT_FOUND。此工具只讀，不會建立或審核申請。",
+      inputSchema: toolInputSchemas.get_plan_change_status,
+      execute: async (args) => executeReadTool(session, "get_plan_change_status", args),
+    }),
     get_my_usage: tool({
       description: "查詢目前客戶的月份流量與通話用量（額度、已用、剩餘、超額、語音分鐘）。month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
       inputSchema: toolInputSchemas.get_my_usage,

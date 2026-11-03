@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlanChangeCreatedSchema, PlanChangeEstimateSchema, type PlanChangeCreated, type PlanChangeEstimate } from "@/lib/contracts";
+import {
+  PlanChangeCreatedSchema, PlanChangeEstimateSchema, PlanChangeStatusSchema,
+  type PlanChangeCreated, type PlanChangeEstimate, type PlanChangeStatus,
+} from "@/lib/contracts";
 import { formatExpiry } from "@/lib/plan-view";
 
 type State =
@@ -18,8 +21,61 @@ const POLICY_TITLE: Record<string, string> = {
   "plan_change_policy#review_rule": "確認與審核流程",
 };
 
+const STATUS_LABEL: Record<PlanChangeStatus["status"], string> = {
+  PENDING: "待審核",
+  APPROVED: "已核准",
+  REJECTED: "已拒絕",
+};
+
+type StatusState = { kind: "loading" } | { kind: "invalid" } | { kind: "ready"; data: PlanChangeStatus };
+
+/** 申請狀態一律來自伺服器 Session 內的可信 request_ref（get_plan_change_status 的 data_ref）；唯讀、無任何操作。 */
+function RequestStatusCard({ request_ref }: { request_ref: string }) {
+  const [state, setState] = useState<StatusState>({ kind: "loading" });
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/data-ref/${encodeURIComponent(request_ref)}`, { credentials: "same-origin" })
+      .then(async (res) => {
+        const body = await res.json();
+        const parsed = PlanChangeStatusSchema.safeParse(body?.data);
+        if (!alive) return;
+        setState(res.ok && body?.status === "success" && parsed.success ? { kind: "ready", data: parsed.data } : { kind: "invalid" });
+      })
+      .catch(() => alive && setState({ kind: "invalid" }));
+    return () => {
+      alive = false;
+    };
+  }, [request_ref]);
+
+  if (state.kind === "loading") return <div className="card" aria-busy="true">載入申請狀態中…</div>;
+  if (state.kind === "invalid") return <div className="card card-invalid" role="alert">資料已失效，請重新查詢。</div>;
+  const d = state.data;
+  return (
+    <section className="card" data-testid="plan-change-status" aria-label="方案變更申請狀態">
+      <header>
+        <span className="badge" data-status={d.status}>{STATUS_LABEL[d.status]}</span>
+        <h3>{d.old_plan_id} → {d.new_plan_id}</h3>
+      </header>
+      <dl>
+        <div><dt>申請編號</dt><dd data-testid="request-id">{d.request_id}</dd></div>
+        <div><dt>申請狀態</dt><dd>{d.status}（{STATUS_LABEL[d.status]}）</dd></div>
+        <div><dt>建立時間</dt><dd>{d.created_at}</dd></div>
+      </dl>
+      {d.status === "PENDING" && <p className="muted">申請尚在審核中，審核通過前不會變更您目前的訂閱方案。</p>}
+    </section>
+  );
+}
+
+/** quote_ref 與 request_ref 恰好擇一；兩者皆無或皆有就視為失效，不顯示任何資料。 */
+export function PlanChangeCard({ quote_ref, request_ref }: { quote_ref?: string; request_ref?: string }) {
+  if (request_ref && !quote_ref) return <RequestStatusCard request_ref={request_ref} />;
+  if (quote_ref && !request_ref) return <QuoteCard quote_ref={quote_ref} />;
+  return <div className="card card-invalid" role="alert">此卡片資料無效，請重新查詢。</div>;
+}
+
 /** 數字一律來自伺服器 Session 內的 Quote（quote_ref）；失效就不顯示任何數字或按鈕。 */
-export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
+function QuoteCard({ quote_ref }: { quote_ref: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
