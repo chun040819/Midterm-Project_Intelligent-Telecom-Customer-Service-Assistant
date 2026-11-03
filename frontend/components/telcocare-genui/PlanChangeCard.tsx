@@ -59,8 +59,7 @@ function RequestStatusCard({ request_ref }: { request_ref: string }) {
       </header>
       <dl>
         <div><dt>申請編號</dt><dd data-testid="request-id">{d.request_id}</dd></div>
-        <div><dt>申請狀態</dt><dd>{d.status}（{STATUS_LABEL[d.status]}）</dd></div>
-        <div><dt>建立時間</dt><dd>{d.created_at}</dd></div>
+        <div><dt>建立時間</dt><dd>{formatExpiry(d.created_at, "Asia/Taipei")}</dd></div>
       </dl>
       {d.status === "PENDING" && <p className="muted">申請尚在審核中，審核通過前不會變更您目前的訂閱方案。</p>}
     </section>

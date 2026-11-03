@@ -57,12 +57,7 @@ const generative = new JSONGenerativeUI({
           quote_ref: z.string().optional().describe("estimate_plan_change 結果的 quote_id"),
           request_ref: z.string().optional().describe("get_plan_change_status 結果的 data_ref"),
         }),
-        render: (props) =>
-          props.request_ref && !props.quote_ref
-            ? <PlanChangeCard request_ref={props.request_ref} />
-            : props.quote_ref && !props.request_ref
-              ? <PlanChangeCard quote_ref={props.quote_ref} />
-              : <PlanChangeCard />,
+        render: (props) => <PlanChangeCard quote_ref={props.quote_ref} request_ref={props.request_ref} />,
       },
       UsageCard: {
         description: "顯示月份流量與語音用量進度。data_ref 必須是 get_my_usage 工具結果中的 data_ref；不要自行填寫月份、額度、用量或剩餘／超額數字。",
