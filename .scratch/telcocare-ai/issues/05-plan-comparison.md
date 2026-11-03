@@ -4,7 +4,7 @@
 
 **Blocked by:** 01：查詢目前訂閱的首條完整流程
 
-**Status:** resolved
+**Status:** ready-for-agent
 
 - [x] list_plans 只回有效方案，max_monthly_fee 限非負整數；無符合方案回成功空清單。
 - [x] PlanComparison 與 PlanChart 解析同一可信資料引用，支援月租或流量圖表；模型選定方案只能是已返回的子集。
