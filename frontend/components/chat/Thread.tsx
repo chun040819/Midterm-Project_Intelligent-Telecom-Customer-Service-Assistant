@@ -9,6 +9,7 @@ import {
   ThreadPrimitive,
 } from "@assistant-ui/react";
 import { OPENING_LINE } from "@/lib/system-prompt";
+import { MarkdownText } from "./MarkdownText";
 import { ToolTrace } from "./ToolTrace";
 
 function Opening() {
@@ -21,11 +22,11 @@ function Opening() {
   );
 }
 
-function Parts() {
+function Parts({ markdown = false }: { markdown?: boolean }) {
   return (
     <MessagePrimitive.Parts>
       {({ part }) => {
-        if (part.type === "text") return <MessagePartPrimitive.Text />;
+        if (part.type === "text") return markdown ? <MarkdownText /> : <MessagePartPrimitive.Text />;
         if (part.type === "tool-call") return part.toolUI ?? <ToolTrace {...part} />;
         return null;
       }}
@@ -44,7 +45,7 @@ function UserMessage() {
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="msg assistant">
-      <Parts />
+      <Parts markdown />
       <AuiIf condition={(s) => s.message.status?.type === "running"}>
         <span className="thinking" aria-live="polite">思考中…</span>
       </AuiIf>
