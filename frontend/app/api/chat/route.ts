@@ -31,6 +31,11 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.get_my_subscription,
       execute: async (args) => executeReadTool(session, "get_my_subscription", args),
     }),
+    get_my_bill: tool({
+      description: "查詢目前客戶的月份帳單（金額、到期日、繳費狀態）。billing_month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
+      inputSchema: toolInputSchemas.get_my_bill,
+      execute: async (args) => executeReadTool(session, "get_my_bill", args),
+    }),
   };
 
   const result = streamText({

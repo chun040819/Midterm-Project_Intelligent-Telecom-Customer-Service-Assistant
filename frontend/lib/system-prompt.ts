@@ -57,4 +57,5 @@ export const RUNTIME_ADDENDUM = `
 - 目前客戶身分由伺服器 Session 決定，工具沒有也不接受 customer_id。
 - 工具結果會附帶 data_ref。呈現卡片時呼叫 present，節點只填 data_ref（例如 {"_type":"SubscriptionCard","data_ref":"<工具結果的 data_ref>"}）；金額、日期、方案資料由伺服器解析，不可自行填寫。
 - 查詢目前方案時，先呼叫 get_my_subscription，再用 present 顯示 SubscriptionCard，最後用文字簡述。
+- 查詢帳單時，先呼叫 get_my_bill（billing_month 格式 YYYY-MM，使用者未指定月份就省略，不要自行猜測月份），再用 present 顯示 BillCard（例如 {"_type":"BillCard","data_ref":"<工具結果的 data_ref>"}），文字中必須說明工具結果實際的 billing_month。查無資料時只回固定句型，不借用其他月份。
 `;

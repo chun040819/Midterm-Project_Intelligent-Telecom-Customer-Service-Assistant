@@ -7,7 +7,7 @@ export type ExecutedTool = ToolEnvelope<unknown> & { data_ref: string | null };
 type Deps = Parameters<typeof callInternalTool>[3];
 
 /**
- * 八個業務工具的 Next.js 端執行入口（目前實作 get_my_subscription）。
+ * 八個業務工具的 Next.js 端執行入口（目前實作 get_my_subscription、get_my_bill）。
  * 客戶身分只取自 session；模型輸入先經 strict Zod 驗證，失敗時不會發出任何內部請求。
  */
 export async function executeReadTool(

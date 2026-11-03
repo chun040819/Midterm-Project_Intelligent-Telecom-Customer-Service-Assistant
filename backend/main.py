@@ -1,12 +1,12 @@
 import hmac
 import os
 import sqlite3
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.db.seed import connect
 
@@ -49,8 +49,38 @@ def get_my_subscription(conn: sqlite3.Connection, customer_id: str, _args: NoArg
     )
 
 
+Month = Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$", strict=True)]
+
+
+class BillArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # 預設值不經驗證；明確傳入 null 或無效月份仍會被拒絕，不視為省略。
+    billing_month: Month = None  # type: ignore[assignment]
+
+
+def get_my_bill(conn: sqlite3.Connection, customer_id: str, args: BillArguments):
+    if args.billing_month is None:
+        query, params = (
+            "WHERE customer_id = ? ORDER BY billing_month DESC LIMIT 1", (customer_id,)
+        )
+    else:
+        query, params = "WHERE customer_id = ? AND billing_month = ?", (customer_id, args.billing_month)
+    row = conn.execute(
+        f"SELECT bill_id, billing_month, amount, due_date, payment_status FROM bills {query}", params
+    ).fetchone()
+    if row is None:
+        return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
+    bill_id, month, amount, due, status = row
+    return success(
+        {"bill_id": bill_id, "billing_month": month, "amount": amount, "due_date": due, "payment_status": status}
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
-TOOLS = {"get_my_subscription": (NoArguments, get_my_subscription)}
+TOOLS = {
+    "get_my_subscription": (NoArguments, get_my_subscription),
+    "get_my_bill": (BillArguments, get_my_bill),
+}
 
 
 class ToolRequest(BaseModel):

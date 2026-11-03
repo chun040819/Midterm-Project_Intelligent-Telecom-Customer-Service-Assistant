@@ -101,3 +101,51 @@ describe("客戶隔離證據（T13／E03）", () => {
     expect(ids).toEqual(["C0001", "C0002"]);
   });
 });
+
+describe("executeReadTool(get_my_bill)", () => {
+  const bill = {
+    status: "success",
+    data: { bill_id: "B-C0001-202610", billing_month: "2026-10", amount: 499, due_date: "2026-11-15", payment_status: "UNPAID" },
+    error: null,
+  };
+
+  it("可省略月份，body 為空 arguments，並回傳 data_ref", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(bill));
+    const result = await executeReadTool(session, "get_my_bill", {}, { fetch, baseUrl: "http://internal", token: "tok" });
+    expect(calls[0].url).toBe("http://internal/internal/tools/get_my_bill");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: {} });
+    expect(result.status).toBe("success");
+    expect(resolveDataRef(session, result.data_ref!)?.envelope).toEqual(bill);
+  });
+
+  it("傳入有效月份原樣轉送", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(bill));
+    await executeReadTool(session, "get_my_bill", { billing_month: "2026-10" }, { fetch });
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: { billing_month: "2026-10" } });
+  });
+
+  it.each([
+    { billing_month: "2026-13" },
+    { billing_month: "202610" },
+    { billing_month: "" },
+    { billing_month: null },
+    { billing_month: 202610 },
+    { billing_month: "2026-10", customer_id: "C0002" },
+  ])("無效輸入 %j 被拒且不發出請求", async (args) => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(bill));
+    const result = await executeReadTool(session, "get_my_bill", args, { fetch });
+    expect(calls).toHaveLength(0);
+    expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "VALIDATION_ERROR" } });
+  });
+
+  it("NOT_FOUND 原樣回傳且不產生 data_ref", async () => {
+    const session = createSession();
+    const nf = { status: "error", data: null, error: { code: "NOT_FOUND", message: "查無" } };
+    const { fetch } = fakeFetch(() => json(nf, 404));
+    const result = await executeReadTool(session, "get_my_bill", { billing_month: "2026-11" }, { fetch });
+    expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "NOT_FOUND" } });
+  });
+});
