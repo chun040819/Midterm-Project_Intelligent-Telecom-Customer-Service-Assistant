@@ -70,3 +70,22 @@ export function cancelQuote(session: DemoSession, quoteId: string): boolean {
   quote.status = "CANCELLED";
   return true;
 }
+
+/**
+ * confirm 可用的 Quote：VALID 且未過期，或同 Session／客戶已 CONSUMED 且有確認關聯（request_id）者
+ * （供冪等重送）。CANCELLED／EXPIRED／他人 Quote 一律不可。
+ */
+export function getQuoteForConfirm(session: DemoSession | undefined, quoteId: string, now = Date.now()): Quote | undefined {
+  const valid = getValidQuote(session, quoteId, now);
+  if (valid) return valid;
+  const quote = session?.quotes.get(quoteId);
+  const ok = quote && session && quote.status === "CONSUMED" && quote.request_id
+    && quote.session_id === session.id && quote.customer_id === session.customerId;
+  return ok ? quote : undefined;
+}
+
+/** 寫入成功（已 commit）後才消耗 Quote 並記下確認關聯。 */
+export function consumeQuote(quote: Quote, requestId: string): void {
+  quote.status = "CONSUMED";
+  quote.request_id = requestId;
+}

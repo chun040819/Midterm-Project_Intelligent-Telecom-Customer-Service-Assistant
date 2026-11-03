@@ -190,16 +190,6 @@ describe("PlanChangeCard 資料來源與確認閘門", () => {
     expect("subscription_id" in body.data).toBe(false);
   });
 
-  it("寫入功能未完成前，confirm 不虛報成功、Quote 保持 VALID", async () => {
-    const { session, result } = await estimate();
-    const id = (result.data as { quote_id: string }).quote_id;
-    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }));
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    const body = await res.json();
-    expect(body.status).toBe("error");
-    expect(getValidQuote(session, id)?.status).toBe("VALID");
-  });
-
   it("跨站請求（無同源 Origin）被拒", async () => {
     const { session, result } = await estimate();
     const id = (result.data as { quote_id: string }).quote_id;
@@ -220,3 +210,181 @@ function cookieReq(sessionId: string, body?: unknown): Request {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+// ---- 工單 08：確認並建立唯一待審申請 ----
+
+const created = (over: Record<string, unknown> = {}) => ({
+  status: "success",
+  data: {
+    request_id: "R-ABC123", quote_id: "Q-x", old_plan_id: "P499", new_plan_id: "P699",
+    status: "PENDING", created_at: "2026-11-03T10:00:00+08:00", already_existed: false, ...over,
+  },
+  error: null,
+});
+
+/** 依 URL 路由的假 FastAPI；記錄所有內部請求。 */
+function routedFetch(routes: Record<string, () => Response | Promise<Response>>) {
+  const calls: { url: string; init: RequestInit }[] = [];
+  const fetch = async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    const key = Object.keys(routes).find((k) => url.endsWith(k));
+    if (!key) throw new Error("unexpected " + url);
+    return routes[key]();
+  };
+  return { fetch, calls };
+}
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+async function quoteIn(session = createSession()) {
+  const { result } = await estimate(session);
+  return { session, id: (result.data as { quote_id: string }).quote_id };
+}
+
+describe("confirm_plan_change（T08／T09／E10）", () => {
+  it("T08：有效 Quote 經受信任路徑建立 PENDING，只送 Quote 綁定資料，之後才消耗 Quote", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch, calls } = routedFetch({ "/internal/actions/confirm_plan_change": () => json(created({ quote_id: id }), 201) });
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data).toMatchObject({ request_id: "R-ABC123", status: "PENDING", already_existed: false });
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      quote_id: id, subscription_id: "S0001", old_plan_id: "P499", new_plan_id: "P699",
+    });
+    expect((calls[0].init.headers as Record<string, string>)["X-Demo-Customer-Id"]).toBe("C0001");
+    expect(session.quotes.get(id)).toMatchObject({ status: "CONSUMED", request_id: "R-ABC123" });
+    expect(getValidQuote(session, id)).toBeUndefined();
+  });
+
+  it("T09：已消耗 Quote 在同 Session 重送回同一 request_id 與 already_existed=true", async () => {
+    const { session, id } = await quoteIn();
+    let n = 0;
+    const { fetch } = routedFetch({
+      "/internal/actions/confirm_plan_change": () => (n++ === 0 ? json(created(), 201) : json(created({ already_existed: true }), 200)),
+    });
+    await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    const again = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(again.status).toBe(200);
+    expect((await again.json()).data).toMatchObject({ request_id: "R-ABC123", already_existed: true });
+  });
+
+  it("並行確認：兩個同時請求都得到同一 request_id，Quote 只消耗一次", async () => {
+    const { session, id } = await quoteIn();
+    let n = 0;
+    const { fetch } = routedFetch({
+      "/internal/actions/confirm_plan_change": async () => {
+        await new Promise((r) => setTimeout(r, 5));
+        return n++ === 0 ? json(created(), 201) : json(created({ already_existed: true }), 200);
+      },
+    });
+    const [a, b] = await Promise.all([
+      confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch }),
+      confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch }),
+    ]);
+    const ids = [(await a.json()).data.request_id, (await b.json()).data.request_id];
+    expect(new Set(ids).size).toBe(1);
+    expect(session.quotes.get(id)?.status).toBe("CONSUMED");
+  });
+
+  it("模型塞入 confirmed 等多餘欄位、跨站、無 Session 一律不發內部請求", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch, calls } = routedFetch({});
+    const extra = await confirmPlanChange(cookieReq(session.id, { quote_id: id, confirmed: true }), { fetch });
+    expect(extra.status).toBe(422);
+    const noOrigin = new Request("http://x/api/plan-change/confirm", {
+      method: "POST", headers: { cookie: `telcocare_session=${session.id}` }, body: JSON.stringify({ quote_id: id }),
+    });
+    expect((await confirmPlanChange(noOrigin, { fetch })).status).toBe(403);
+    expect((await confirmPlanChange(cookieReq("no-such-session", { quote_id: id }), { fetch })).status).toBe(409);
+    expect(calls).toHaveLength(0);
+    expect(getValidQuote(session, id)?.status).toBe("VALID");
+  });
+
+  it("取消／過期／切換客戶／他人 Session 的 Quote 不可確認，也不發內部請求", async () => {
+    const { fetch, calls } = routedFetch({});
+    const a = await quoteIn();
+    cancelQuote(a.session, a.id);
+    expect((await confirmPlanChange(cookieReq(a.session.id, { quote_id: a.id }), { fetch })).status).toBe(409);
+    const b = await quoteIn();
+    b.session.quotes.get(b.id)!.expires_at = new Date(Date.now() - 1000).toISOString();
+    expect((await confirmPlanChange(cookieReq(b.session.id, { quote_id: b.id }), { fetch })).status).toBe(409);
+    const c = await quoteIn();
+    switchCustomer(c.session, "C0002");
+    expect((await confirmPlanChange(cookieReq(c.session.id, { quote_id: c.id }), { fetch })).status).toBe(409);
+    const d = await quoteIn();
+    expect((await confirmPlanChange(cookieReq(createSession().id, { quote_id: d.id }), { fetch })).status).toBe(409);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("其他 Quote Pending 衝突／舊訂閱變動：回 FastAPI 錯誤、Quote 仍 VALID、不虛報成功", async () => {
+    const { session, id } = await quoteIn();
+    const err = (code: string) => ({ status: "error", data: null, error: { code, message: "m" } });
+    const { fetch } = routedFetch({ "/internal/actions/confirm_plan_change": () => json(err("CONFLICT"), 409) });
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("CONFLICT");
+    expect(session.quotes.get(id)?.status).toBe("VALID");
+  });
+
+  it("E10：寫入結果不明時先查同 Quote 既有紀錄，找到就視為成功，且不重送 INSERT", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch, calls } = routedFetch({
+      "/internal/actions/confirm_plan_change": () => { throw new Error("timeout"); },
+      "/internal/actions/find_plan_change_request": () => json(created({ already_existed: true })),
+    });
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toMatchObject({ request_id: "R-ABC123", already_existed: true });
+    expect(calls.filter((c) => c.url.endsWith("confirm_plan_change"))).toHaveLength(1);
+    expect(JSON.parse(calls[1].init.body as string)).toEqual({ quote_id: id });
+    expect(session.quotes.get(id)?.status).toBe("CONSUMED");
+  });
+
+  it("E10：查無既有紀錄時回 INTERNAL_ERROR，不消耗 Quote、不自動重送", async () => {
+    const { session, id } = await quoteIn();
+    const notFound = { status: "error", data: null, error: { code: "NOT_FOUND", message: "m" } };
+    const { fetch, calls } = routedFetch({
+      "/internal/actions/confirm_plan_change": () => { throw new Error("timeout"); },
+      "/internal/actions/find_plan_change_request": () => json(notFound, 404),
+    });
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error.code).toBe("INTERNAL_ERROR");
+    expect(calls.filter((c) => c.url.endsWith("confirm_plan_change"))).toHaveLength(1);
+    expect(session.quotes.get(id)?.status).toBe("VALID");
+  });
+
+  it("失去 Session 後不得僅靠 Quote ID 取得資料；重啟後 Quote 消失", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch, calls } = routedFetch({ "/internal/actions/confirm_plan_change": () => json(created(), 201) });
+    await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    clearAllSessions();
+    const again = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(again.status).toBe(409);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("quote view：已消耗者帶 request_id 供卡片重新掛載顯示成功", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch } = routedFetch({ "/internal/actions/confirm_plan_change": () => json(created(), 201) });
+    await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    const view = getQuoteView(cookieReq(session.id), id);
+    expect(view.status).toBe(200);
+    expect((await view.json()).data).toMatchObject({ request_id: "R-ABC123", new_plan_id: "P699" });
+  });
+
+  it("確認進行中被取消：DB 已寫入時 Quote 仍記下 request_id 並回成功，不顯示已取消", async () => {
+    const { session, id } = await quoteIn();
+    const { fetch } = routedFetch({
+      "/internal/actions/confirm_plan_change": () => {
+        cancelQuote(session, id);
+        return json(created(), 201);
+      },
+    });
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: id }), { fetch });
+    expect(res.status).toBe(201);
+    expect(session.quotes.get(id)).toMatchObject({ status: "CONSUMED", request_id: "R-ABC123" });
+  });
+});

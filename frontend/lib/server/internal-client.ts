@@ -12,25 +12,46 @@ function isEnvelope(value: unknown): value is ToolEnvelope<unknown> {
   return v.status === "success" || (v.status === "error" && typeof v.error === "object" && v.error !== null);
 }
 
+type Deps = { fetch?: FetchLike; baseUrl?: string; token?: string };
+
 /** Next.js Server → FastAPI。身分標頭只由這裡依 Session 產生，絕不採用 Browser／模型提供的值。 */
-export async function callInternalTool(
+export function callInternalTool(
   tool: string,
   args: Record<string, unknown>,
   customerId: string,
-  deps: { fetch?: FetchLike; baseUrl?: string; token?: string } = {},
+  deps: Deps = {},
+): Promise<ToolEnvelope<unknown>> {
+  return post(`/internal/tools/${tool}`, { arguments: args }, customerId, deps);
+}
+
+/** 受信任 Action 路徑（寫入授權 Context）：只給 confirm Route 在驗證 Session／Quote 後呼叫。 */
+export function callInternalAction(
+  action: "confirm_plan_change" | "find_plan_change_request",
+  body: Record<string, unknown>,
+  customerId: string,
+  deps: Deps = {},
+): Promise<ToolEnvelope<unknown>> {
+  return post(`/internal/actions/${action}`, body, customerId, deps);
+}
+
+async function post(
+  path: string,
+  payload: unknown,
+  customerId: string,
+  deps: Deps,
 ): Promise<ToolEnvelope<unknown>> {
   const doFetch = deps.fetch ?? fetch;
   const baseUrl = deps.baseUrl ?? process.env.FASTAPI_BASE_URL ?? "http://127.0.0.1:8000";
   const token = deps.token ?? process.env.INTERNAL_SERVICE_TOKEN ?? "";
   try {
-    const res = await doFetch(`${baseUrl}/internal/tools/${tool}`, {
+    const res = await doFetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Internal-Token": token,
         "X-Demo-Customer-Id": customerId,
       },
-      body: JSON.stringify({ arguments: args }),
+      body: JSON.stringify(payload),
       cache: "no-store",
     });
     const body: unknown = await res.json().catch(() => null);

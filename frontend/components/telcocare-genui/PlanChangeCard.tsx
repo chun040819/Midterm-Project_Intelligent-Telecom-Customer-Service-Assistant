@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlanChangeEstimateSchema, type PlanChangeEstimate } from "@/lib/contracts";
+import { PlanChangeCreatedSchema, PlanChangeEstimateSchema, type PlanChangeCreated, type PlanChangeEstimate } from "@/lib/contracts";
 import { formatExpiry } from "@/lib/plan-view";
 
 type State =
   | { kind: "loading" }
   | { kind: "invalid" }
   | { kind: "ready"; data: PlanChangeEstimate; busy: boolean; message?: string }
+  | { kind: "success"; data: PlanChangeEstimate; request: { request_id: string; already_existed: boolean } }
   | { kind: "cancelled" };
 
 const POLICY_TITLE: Record<string, string> = {
@@ -28,7 +29,14 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
         const body = await res.json();
         const parsed = PlanChangeEstimateSchema.safeParse(body?.data);
         if (!alive) return;
-        setState(res.ok && body?.status === "success" && parsed.success ? { kind: "ready", data: parsed.data, busy: false } : { kind: "invalid" });
+        if (!(res.ok && body?.status === "success" && parsed.success)) return setState({ kind: "invalid" });
+        // 已確認過的 Quote（重新掛載）直接顯示成功，不再提供按鈕。
+        const requestId = body.data?.request_id;
+        setState(
+          typeof requestId === "string" && requestId
+            ? { kind: "success", data: parsed.data, request: { request_id: requestId, already_existed: true } }
+            : { kind: "ready", data: parsed.data, busy: false },
+        );
       })
       .catch(() => alive && setState({ kind: "invalid" }));
     return () => {
@@ -50,7 +58,12 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
       const body = await res.json().catch(() => null);
       if (path === "cancel" && res.ok && body?.status === "success") return setState({ kind: "cancelled" });
       if (res.status === 404 || body?.error?.code === "QUOTE_EXPIRED") return setState({ kind: "invalid" });
-      // 寫入功能完成前，confirm 只會得到錯誤；如實顯示，不宣稱成功。
+      const created = PlanChangeCreatedSchema.safeParse(body?.data);
+      if (path === "confirm" && res.ok && body?.status === "success" && created.success) {
+        const c: PlanChangeCreated = created.data;
+        return setState({ kind: "success", data, request: { request_id: c.request_id, already_existed: c.already_existed } });
+      }
+      // 其餘一律如實顯示錯誤，不宣稱成功。
       setState({ kind: "ready", data, busy: false, message: body?.error?.message ?? "目前系統無法完成這項操作，請稍後再試。" });
     } catch {
       setState({ kind: "ready", data, busy: false, message: "目前系統無法完成這項操作，請稍後再試。" });
@@ -60,6 +73,21 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
   if (state.kind === "loading") return <div className="card" aria-busy="true">載入方案變更評估中…</div>;
   if (state.kind === "invalid") return <div className="card card-invalid" role="alert">此評估已失效，請重新查詢並確認。</div>;
   if (state.kind === "cancelled") return <div className="card" data-testid="plan-change-cancelled">已取消此次方案變更評估，未建立任何申請。</div>;
+  if (state.kind === "success") {
+    return (
+      <section className="card" data-testid="plan-change-success" aria-label="方案變更申請結果">
+        <header>
+          <span className="badge">待審核</span>
+          <h3>{state.data.current_plan_id} → {state.data.new_plan_id}</h3>
+        </header>
+        <p>
+          {state.request.already_existed ? "此申請先前已送出，未重複建立。" : "已送出申請。"}
+          申請編號 <strong data-testid="request-id">{state.request.request_id}</strong>，狀態為待審核（PENDING）。
+        </p>
+        <p className="muted">審核通過前不會變更您目前的訂閱方案。</p>
+      </section>
+    );
+  }
   const d = state.data;
   const sign = d.monthly_delta > 0 ? "+" : "";
   return (
@@ -79,7 +107,7 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
       )}
       {state.message && <p role="alert" className="card-invalid">{state.message}</p>}
       <div className="actions">
-        <button type="button" disabled={state.busy} onClick={() => act("confirm")}>確認送出</button>
+        <button type="button" disabled={state.busy} onClick={() => act("confirm")}>{state.busy ? "送出中…" : "確認送出"}</button>
         <button type="button" disabled={state.busy} onClick={() => act("cancel")}>取消</button>
       </div>
       <footer>評估有效至 {d.expires_at ? formatExpiry(d.expires_at) : "—"}</footer>

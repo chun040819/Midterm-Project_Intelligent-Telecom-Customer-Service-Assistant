@@ -84,6 +84,18 @@ export const PlanChangeEstimateSchema = z.object({
 
 export type PlanChangeEstimate = z.infer<typeof PlanChangeEstimateSchema>;
 
+export const PlanChangeCreatedSchema = z.object({
+  request_id: z.string().min(1),
+  quote_id: z.string(),
+  old_plan_id: z.string(),
+  new_plan_id: z.string(),
+  status: z.literal("PENDING"),
+  created_at: z.string(),
+  already_existed: z.boolean(),
+});
+
+export type PlanChangeCreated = z.infer<typeof PlanChangeCreatedSchema>;
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),

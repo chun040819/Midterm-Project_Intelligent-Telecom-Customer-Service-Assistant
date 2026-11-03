@@ -1,10 +1,13 @@
 import hmac
 import os
 import sqlite3
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -144,6 +147,14 @@ def business_date() -> str:
     return os.environ.get("DEMO_BUSINESS_DATE") or DEFAULT_BUSINESS_DATE
 
 
+def ineligible_reason(new_plan_id: str, cur_plan_id: str, delta: int, contract_end: str) -> str | None:
+    if new_plan_id == cur_plan_id:
+        return "SAME_PLAN"
+    if delta < 0 and business_date() < contract_end:  # 到期當天起可降級
+        return "DOWNGRADE_BEFORE_CONTRACT_END"
+    return None
+
+
 class EstimateArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
     new_plan_id: Annotated[str, Field(pattern=r"^P[0-9]{3}$", strict=True)]
@@ -168,13 +179,11 @@ def estimate_plan_change(conn: sqlite3.Connection, customer_id: str, args: Estim
     cur_id, cur_fee, contract_end, subscription_id = current
     new_fee = target[0]
     delta = new_fee - cur_fee
-    reason = None
+    reason = ineligible_reason(args.new_plan_id, cur_id, delta, contract_end)
     refs = ["plan_change_policy#upgrade_rules" if delta > 0 else "plan_change_policy#downgrade_rules"]
-    if args.new_plan_id == cur_id:
-        reason, refs = "SAME_PLAN", []
-    elif delta < 0 and business_date() < contract_end:  # 到期當天起可降級
-        reason = "DOWNGRADE_BEFORE_CONTRACT_END"
-    else:
+    if reason == "SAME_PLAN":
+        refs = []
+    elif reason is None:
         refs.append("plan_change_policy#review_rule")
     return success(
         {
@@ -195,10 +204,112 @@ class CreateRequestArguments(BaseModel):
 
 def create_plan_change_request(_conn: sqlite3.Connection, _customer_id: str, _args: CreateRequestArguments):
     # SPEC §5.5／§7：此通用工具入口沒有受信任的寫入授權 Context，一律拒絕且不寫入。
-    # 授權寫入路徑（confirm Action）屬工單 08，尚未實作。
+    # 授權寫入只走 /internal/actions/confirm_plan_change（由 Next.js confirm Action 驗證後呼叫）。
     return error_response(
         409, "CONFIRMATION_REQUIRED", "請先查看方案變更確認卡片，並點擊『確認送出』才會建立待審申請。"
     )
+
+
+class ConfirmArguments(BaseModel):
+    """Next.js 依 Session 內 Quote 組成；不含任何 confirmed 旗標，授權來自受信任的 Action 路徑本身。"""
+
+    model_config = ConfigDict(extra="forbid")
+    quote_id: Annotated[str, Field(min_length=1, max_length=100, strict=True)]
+    subscription_id: Annotated[str, Field(min_length=1, max_length=50, strict=True)]
+    old_plan_id: Annotated[str, Field(pattern=r"^P[0-9]{3}$", strict=True)]
+    new_plan_id: Annotated[str, Field(pattern=r"^P[0-9]{3}$", strict=True)]
+
+
+class LookupArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    quote_id: Annotated[str, Field(min_length=1, max_length=100, strict=True)]
+
+
+_REQUEST_COLUMNS = "request_id, quote_id, old_plan_id, new_plan_id, status, created_at"
+
+
+def _created(row: tuple, already_existed: bool) -> dict:
+    request_id, quote_id, old_plan, new_plan, status, created_at = row
+    return {
+        "request_id": request_id, "quote_id": quote_id, "old_plan_id": old_plan,
+        "new_plan_id": new_plan, "status": status, "created_at": created_at,
+        "already_existed": already_existed,
+    }
+
+
+def _existing_for_quote(conn: sqlite3.Connection, customer_id: str, quote_id: str):
+    """同一已授權 Quote 的既有申請；只查目前客戶自己的紀錄，不因 quote_id 外洩他人資料。"""
+    return conn.execute(
+        f"SELECT {_REQUEST_COLUMNS} FROM plan_change_requests WHERE quote_id = ? AND customer_id = ?",
+        (quote_id, customer_id),
+    ).fetchone()
+
+
+CONFLICT_MESSAGE = "目前已有待審核的資費變更申請，無法重複建立。"
+
+
+def confirm_plan_change(conn: sqlite3.Connection, customer_id: str, args: ConfirmArguments):
+    """受信任 Action 的原子寫入：先查同 Quote（冪等），再重驗訂閱、目標、資格與 Pending，最後依賴唯一索引。"""
+    conn.isolation_level = None  # 手動交易
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        existing = _existing_for_quote(conn, customer_id, args.quote_id)
+        if existing:
+            conn.execute("ROLLBACK")
+            return JSONResponse(status_code=200, content=success(_created(existing, True)))
+        current = conn.execute(
+            "SELECT s.subscription_id, p.plan_id, p.monthly_fee, s.contract_end_date FROM subscriptions s "
+            "JOIN plans p ON p.plan_id = s.plan_id WHERE s.customer_id = ?",
+            (customer_id,),
+        ).fetchone()
+        target = conn.execute(
+            "SELECT monthly_fee FROM plans WHERE plan_id = ? AND is_active = 1", (args.new_plan_id,)
+        ).fetchone()
+        if current is None or target is None:
+            conn.execute("ROLLBACK")
+            return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
+        sub_id, cur_plan, cur_fee, contract_end = current
+        if sub_id != args.subscription_id or cur_plan != args.old_plan_id:
+            conn.execute("ROLLBACK")
+            return error_response(409, "CONFLICT", "您的訂閱已有變動，請重新評估方案變更。")
+        if ineligible_reason(args.new_plan_id, cur_plan, target[0] - cur_fee, contract_end):
+            conn.execute("ROLLBACK")
+            return error_response(409, "CONFLICT", "目前條件不符合此方案變更，請重新評估。")
+        if conn.execute(
+            "SELECT 1 FROM plan_change_requests WHERE customer_id = ? AND status = 'PENDING'", (customer_id,)
+        ).fetchone():
+            conn.execute("ROLLBACK")
+            return error_response(409, "CONFLICT", CONFLICT_MESSAGE)
+        request_id = f"R-{uuid.uuid4().hex[:12].upper()}"
+        created_at = datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds")
+        try:
+            conn.execute(
+                "INSERT INTO plan_change_requests VALUES (?,?,?,?,?,'PENDING',?)",
+                (request_id, args.quote_id, customer_id, cur_plan, args.new_plan_id, created_at),
+            )
+        except sqlite3.IntegrityError:  # 唯一索引：競爭下的 Pending／Quote 重複
+            conn.execute("ROLLBACK")
+            raced = _existing_for_quote(conn, customer_id, args.quote_id)
+            if raced:
+                return JSONResponse(status_code=200, content=success(_created(raced, True)))
+            return error_response(409, "CONFLICT", CONFLICT_MESSAGE)
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return JSONResponse(
+        status_code=201,
+        content=success(_created((request_id, args.quote_id, cur_plan, args.new_plan_id, "PENDING", created_at), False)),
+    )
+
+
+def find_plan_change_request(conn: sqlite3.Connection, customer_id: str, args: LookupArguments):
+    """E10：結果不明時只讀查詢同一 Quote 的既有申請（呼叫端須已確認 Session／Quote 關聯）。"""
+    existing = _existing_for_quote(conn, customer_id, args.quote_id)
+    if existing is None:
+        return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
+    return success(_created(existing, True))
 
 
 # 工具白名單：名稱 -> (輸入模型, handler)
@@ -265,6 +376,35 @@ def create_app(
     def health():
         return {"status": "ok"}
 
+    def authorized_conn(request: Request):
+        """驗證內部 Token 與客戶；回傳 (conn, customer_id) 或錯誤 Response。"""
+        supplied = request.headers.get("X-Internal-Token", "")
+        if not token or not hmac.compare_digest(supplied.encode(), token.encode()):
+            return error_response(403, "FORBIDDEN", "無權存取。")
+        customer_id = request.headers.get("X-Demo-Customer-Id", "")
+        conn = connect(db_path, cross_thread=True)
+        if conn.execute("SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)).fetchone() is None:
+            conn.close()
+            return error_response(403, "FORBIDDEN", "為保護客戶資料，我只能查詢目前 Demo 帳戶的資訊。")
+        return conn, customer_id
+
+    async def run_handler(request: Request, model, handler, *, wrap_body: bool):
+        auth = authorized_conn(request)
+        if isinstance(auth, JSONResponse):
+            return auth
+        conn, customer_id = auth
+        try:
+            try:
+                payload = await request.json()
+                if wrap_body:
+                    payload = ToolRequest.model_validate(payload).arguments
+                args = model.model_validate(payload)
+            except (ValidationError, ValueError):
+                return error_response(422, "VALIDATION_ERROR", "工具參數無效。")
+            return await run_in_threadpool(handler, conn, customer_id, args)
+        finally:
+            conn.close()
+
     @app.post("/internal/tools/{tool_name}")
     async def run_tool(tool_name: str, request: Request):
         supplied = request.headers.get("X-Internal-Token", "")
@@ -272,20 +412,17 @@ def create_app(
             return error_response(403, "FORBIDDEN", "無權存取。")
         if tool_name not in tools:
             return error_response(404, "NOT_FOUND", "不存在的工具。")
-        customer_id = request.headers.get("X-Demo-Customer-Id", "")
-        conn = connect(db_path)
-        try:
-            if conn.execute("SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)).fetchone() is None:
-                return error_response(403, "FORBIDDEN", "為保護客戶資料，我只能查詢目前 Demo 帳戶的資訊。")
-            try:
-                body = ToolRequest.model_validate(await request.json())
-                model, handler = tools[tool_name]
-                args = model.model_validate(body.arguments)
-            except (ValidationError, ValueError):
-                return error_response(422, "VALIDATION_ERROR", "工具參數無效。")
-            return handler(conn, customer_id, args)
-        finally:
-            conn.close()
+        model, handler = tools[tool_name]
+        return await run_handler(request, model, handler, wrap_body=True)
+
+    # 受信任 Action 路徑（SPEC §5.5／§6.2）：不屬模型可見工具，只有 Next.js confirm Route 驗證後才會呼叫。
+    @app.post("/internal/actions/confirm_plan_change")
+    async def confirm_action(request: Request):
+        return await run_handler(request, ConfirmArguments, confirm_plan_change, wrap_body=False)
+
+    @app.post("/internal/actions/find_plan_change_request")
+    async def find_action(request: Request):
+        return await run_handler(request, LookupArguments, find_plan_change_request, wrap_body=False)
 
     return app
 

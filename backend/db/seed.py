@@ -41,8 +41,9 @@ REQUESTS = [
 ]
 
 
-def connect(db_path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+def connect(db_path: str, *, cross_thread: bool = False) -> sqlite3.Connection:
+    # cross_thread：請求中建立、交給 threadpool 使用的連線（單一請求內循序使用，不會並用）。
+    conn = sqlite3.connect(db_path, check_same_thread=not cross_thread)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 

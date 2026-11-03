@@ -1,5 +1,9 @@
 import { isSameOrigin, jsonWithSession, sessionFromRequest } from "@/lib/session/http";
-import { cancelQuote, getValidQuote } from "@/lib/session/quotes";
+import { PlanChangeCreatedSchema } from "@/lib/contracts";
+import { cancelQuote, consumeQuote, getQuoteForConfirm } from "@/lib/session/quotes";
+import { callInternalAction } from "./internal-client";
+
+type Deps = Parameters<typeof callInternalAction>[3];
 
 function errorBody(code: string, message: string) {
   return { status: "error", data: null, error: { code, message } };
@@ -14,7 +18,7 @@ function quoteExpired(): Response {
 
 /** PlanChangeCard 以 quote_ref 解析：只回傳本 Session、目前客戶、仍有效的 Quote 的可顯示欄位。 */
 export function getQuoteView(req: Request, quoteRef: string): Response {
-  const quote = getValidQuote(sessionFromRequest(req), quoteRef);
+  const quote = getQuoteForConfirm(sessionFromRequest(req), quoteRef);
   if (!quote) return jsonWithSession(errorBody("NOT_FOUND", QUOTE_GONE), null, 404);
   return jsonWithSession(
     {
@@ -25,6 +29,7 @@ export function getQuoteView(req: Request, quoteRef: string): Response {
         current_monthly_fee: quote.current_monthly_fee, new_monthly_fee: quote.new_monthly_fee,
         monthly_delta: quote.monthly_delta, quote_id: quote.quote_id, expires_at: quote.expires_at,
         policy_refs: quote.policy_refs,
+        ...(quote.status === "CONSUMED" ? { request_id: quote.request_id } : {}),
       },
       error: null,
     },
@@ -59,13 +64,53 @@ export async function cancelPlanChange(req: Request): Promise<Response> {
   return jsonWithSession({ status: "success", data: { cancelled: true }, error: null }, null);
 }
 
+const STATUS_BY_CODE: Record<string, number> = {
+  NOT_FOUND: 404, FORBIDDEN: 403, VALIDATION_ERROR: 422, CONFLICT: 409,
+  CONFIRMATION_REQUIRED: 409, QUOTE_EXPIRED: 409,
+};
+
+const UNKNOWN_OUTCOME = "目前無法確認申請是否已送出，請稍後再試；系統不會重複建立申請。";
+
+function createdResponse(raw: unknown, forceExisting = false): { response: Response; requestId: string } | undefined {
+  const parsed = PlanChangeCreatedSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  const created = { ...parsed.data, already_existed: parsed.data.already_existed || forceExisting };
+  const body = { status: "success", data: created, error: null };
+  return { response: jsonWithSession(body, null, created.already_existed ? 200 : 201), requestId: created.request_id };
+}
+
 /**
- * confirm_plan_change：閘門（同源、Session、有效 Quote）已就緒，但寫入 PENDING 的功能尚未實作
- * （工單 08）。在此之前一律不寫入、不改 Quote 狀態，也絕不回報成功。
+ * confirm_plan_change：同源、Session、Quote 都通過才算受信任 Action；Quote 綁定資料（非 Browser／模型輸入）
+ * 組成內部請求。FastAPI 在單一交易內先查同 Quote、再重驗訂閱／資格／Pending；commit 後才消耗 Quote。
  */
-export async function confirmPlanChange(req: Request): Promise<Response> {
+export async function confirmPlanChange(req: Request, deps?: Deps): Promise<Response> {
   const g = await gate(req);
   if (g instanceof Response) return g;
-  if (!getValidQuote(g.session, g.quoteId)) return quoteExpired();
-  return jsonWithSession(errorBody("INTERNAL_ERROR", "確認送出功能尚未開放，目前不會建立任何申請。"), null, 501);
+  const quote = getQuoteForConfirm(g.session, g.quoteId);
+  if (!quote) return quoteExpired();
+
+  const customerId = g.session.customerId;
+  const envelope = await callInternalAction(
+    "confirm_plan_change",
+    {
+      quote_id: quote.quote_id, subscription_id: quote.subscription_id,
+      old_plan_id: quote.old_plan_id, new_plan_id: quote.new_plan_id,
+    },
+    customerId,
+    deps,
+  );
+
+  let result = envelope.status === "success" ? createdResponse(envelope.data) : undefined;
+  if (envelope.status === "error" && envelope.error.code !== "INTERNAL_ERROR") {
+    return jsonWithSession(envelope, null, STATUS_BY_CODE[envelope.error.code] ?? 500);
+  }
+  if (!result) {
+    // E10：結果不明。只查同一已授權 Quote 的既有紀錄，絕不自動重送 INSERT。
+    const found = await callInternalAction("find_plan_change_request", { quote_id: quote.quote_id }, customerId, deps);
+    result = found.status === "success" ? createdResponse(found.data, true) : undefined;
+  }
+  if (!result) return jsonWithSession(errorBody("INTERNAL_ERROR", UNKNOWN_OUTCOME), null, 500);
+  // 寫入已 commit：即使確認期間被取消／過期，DB 事實優先，Quote 仍須記下確認關聯。
+  if (quote.status !== "CONSUMED") consumeQuote(quote, result.requestId);
+  return result.response;
 }
