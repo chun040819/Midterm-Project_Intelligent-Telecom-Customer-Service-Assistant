@@ -137,8 +137,56 @@ def get_my_usage(conn: sqlite3.Connection, customer_id: str, args: UsageArgument
     )
 
 
+BUSINESS_DATE = "2026-11-03"  # 固定業務判定日（SPEC §4）；Quote 期限不使用它。
+
+
+class EstimateArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    new_plan_id: Annotated[str, Field(pattern=r"^P[0-9]{3}$", strict=True)]
+
+
+def estimate_plan_change(conn: sqlite3.Connection, customer_id: str, args: EstimateArguments):
+    """只計算資格、新舊方案、價差與政策 refs；Quote 由 Next.js 建立（GAP-01），此處不寫入。"""
+    target = conn.execute(
+        "SELECT monthly_fee FROM plans WHERE plan_id = ? AND is_active = 1", (args.new_plan_id,)
+    ).fetchone()
+    current = conn.execute(
+        "SELECT p.plan_id, p.monthly_fee, s.contract_end_date, s.subscription_id FROM subscriptions s "
+        "JOIN plans p ON p.plan_id = s.plan_id WHERE s.customer_id = ?",
+        (customer_id,),
+    ).fetchone()
+    if target is None or current is None:
+        return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
+    if conn.execute(
+        "SELECT 1 FROM plan_change_requests WHERE customer_id = ? AND status = 'PENDING'", (customer_id,)
+    ).fetchone():
+        return error_response(409, "CONFLICT", "目前已有待審核的資費變更申請，無法重複建立。")
+    cur_id, cur_fee, contract_end, subscription_id = current
+    new_fee = target[0]
+    delta = new_fee - cur_fee
+    reason = None
+    refs = ["plan_change_policy#upgrade_rules" if delta > 0 else "plan_change_policy#downgrade_rules"]
+    if args.new_plan_id == cur_id:
+        reason, refs = "SAME_PLAN", []
+    elif delta < 0 and BUSINESS_DATE < contract_end:  # 到期當天起可降級
+        reason = "DOWNGRADE_BEFORE_CONTRACT_END"
+    else:
+        refs.append("plan_change_policy#review_rule")
+    return success(
+        {
+            "eligible": reason is None, "reason_code": reason,
+            "current_plan_id": cur_id, "new_plan_id": args.new_plan_id,
+            "current_monthly_fee": cur_fee, "new_monthly_fee": new_fee, "monthly_delta": delta,
+            "quote_id": None, "expires_at": None, "policy_refs": refs,
+            # 內部欄位：供 Next.js 綁定 Quote 與訂閱，不屬模型可見契約，Next.js 會移除。
+            "subscription_id": subscription_id,
+        }
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
 TOOLS = {
+    "estimate_plan_change": (EstimateArguments, estimate_plan_change),
     "list_plans": (PlansArguments, list_plans),
     "get_my_subscription": (NoArguments, get_my_subscription),
     "get_my_bill": (BillArguments, get_my_bill),

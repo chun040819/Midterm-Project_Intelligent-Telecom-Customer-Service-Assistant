@@ -68,6 +68,22 @@ export const UsageResultSchema = z.object({
 
 export type UsageResult = z.infer<typeof UsageResultSchema>;
 
+/** 模型可見的完整 PlanChangeEstimate（SPEC §5.2）；quote_id／expires_at 由 Next.js 填入。 */
+export const PlanChangeEstimateSchema = z.object({
+  eligible: z.boolean(),
+  reason_code: z.string().nullable(),
+  current_plan_id: z.string(),
+  new_plan_id: z.string(),
+  current_monthly_fee: z.number().int().nonnegative(),
+  new_monthly_fee: z.number().int().nonnegative(),
+  monthly_delta: z.number().int(),
+  quote_id: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  policy_refs: z.array(z.string()),
+});
+
+export type PlanChangeEstimate = z.infer<typeof PlanChangeEstimateSchema>;
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
@@ -75,6 +91,8 @@ export const toolInputSchemas = {
   search_policy: z.object({ query: z.string().min(1).max(500) }).strict(),
   list_plans: z.object({ max_monthly_fee: z.number().int().nonnegative().optional() }).strict(),
   get_my_usage: z.object({ month: MonthSchema.optional() }).strict(),
+  estimate_plan_change: z.object({ new_plan_id: z.string().regex(/^P[0-9]{3}$/) }).strict(),
+  create_plan_change_request: z.object({ quote_id: z.string().min(1).max(100) }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

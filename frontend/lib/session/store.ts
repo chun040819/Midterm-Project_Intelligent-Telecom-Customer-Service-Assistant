@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ToolEnvelope } from "@/lib/contracts";
+import type { Quote } from "./quotes";
 
 export const DEFAULT_CUSTOMER_ID = "C0001";
 
@@ -9,6 +10,7 @@ export type DemoSession = {
   id: string;
   customerId: string;
   dataRefs: Map<string, DataRefEntry>;
+  quotes: Map<string, Quote>;
 };
 
 // 單機單程序記憶體（SPEC §6.3）；掛在 globalThis 以免 dev HMR 重置。
@@ -16,7 +18,7 @@ const g = globalThis as unknown as { __telcocareSessions?: Map<string, DemoSessi
 const sessions = (g.__telcocareSessions ??= new Map<string, DemoSession>());
 
 export function createSession(): DemoSession {
-  const session: DemoSession = { id: randomUUID(), customerId: DEFAULT_CUSTOMER_ID, dataRefs: new Map() };
+  const session: DemoSession = { id: randomUUID(), customerId: DEFAULT_CUSTOMER_ID, dataRefs: new Map(), quotes: new Map() };
   sessions.set(session.id, session);
   return session;
 }
@@ -29,6 +31,7 @@ export function getSession(id: string | undefined): DemoSession | undefined {
 export function switchCustomer(session: DemoSession, customerId: string): void {
   session.customerId = customerId;
   session.dataRefs.clear();
+  session.quotes.clear();
 }
 
 export function registerDataRef(session: DemoSession, tool: string, envelope: ToolEnvelope<unknown>): string {

@@ -30,6 +30,11 @@ body { background: var(--bg); color: var(--fg); font-family: -apple-system, "Pin
 .card dt { font-size: 12px; color: var(--muted); }
 .card dd { margin: 0; font-weight: 600; }
 .card footer { font-size: 12px; color: var(--muted); }
+.card .actions { display: flex; gap: 8px; margin: 8px 0; }
+.card .actions button { font: inherit; padding: 6px 16px; border-radius: 8px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
+.card .actions button:last-child { background: var(--card); color: var(--brand); }
+.card .actions button:disabled { opacity: .5; cursor: not-allowed; }
+.card .muted { color: var(--muted); font-size: 13px; }
 .card-invalid { color: #a33; }
 @media (max-width: 520px) { .card dl { grid-template-columns: 1fr; } .msg { max-width: 100%; } }
 /* Markdown 渲染後由元素自帶換行，取消外層 pre-wrap 避免多餘空白 */

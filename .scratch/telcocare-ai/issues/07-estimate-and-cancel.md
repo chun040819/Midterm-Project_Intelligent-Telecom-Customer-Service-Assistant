@@ -6,9 +6,15 @@
 
 **Status:** ready-for-agent
 
-- [ ] estimate_plan_change 由 FastAPI 計算資格、舊新方案、差額及真實 policy_refs；合格時才由 Next.js 建立綁定 Session、客戶、訂閱與方案的不可預測 Quote。
-- [ ] 固定業務日為 2026-11-03；Quote 使用真實含時區時間計算十分鐘期限，不混用業務日期。
+- [x] estimate_plan_change 由 FastAPI 計算資格、舊新方案、差額及真實 policy_refs；合格時才由 Next.js 建立綁定 Session、客戶、訂閱與方案的不可預測 Quote。
+- [x] 固定業務日為 2026-11-03；Quote 使用真實含時區時間計算十分鐘期限，不混用業務日期。
 - [ ] PlanChangeCard 以可信 quote_ref 顯示舊新方案、月租差額、政策提醒及只新增 PENDING、不立即生效；確認動作在寫入功能完成前不得虛報成功。
-- [ ] T06 為 C0001 升級 P699、差額 +200；T10 合約內降級無 Quote；T11 已有 Pending 回 CONFLICT；另驗證相同、停用、不存在方案及到期當天可降級。
-- [ ] 取消、到期、切換客戶、重啟後舊 Quote 無法使用；取消不建立或取消既有申請，覆蓋 E01/E02/E03。
+- [x] T06 為 C0001 升級 P699、差額 +200；T10 合約內降級無 Quote；T11 已有 Pending 回 CONFLICT；另驗證相同、停用、不存在方案及到期當天可降級。
+- [x] 取消、到期、切換客戶、重啟後舊 Quote 無法使用；取消不建立或取消既有申請，覆蓋 E01/E02/E03。
 - [ ] 模型直接呼叫 create_plan_change_request 或對話說好均回 CONFIRMATION_REQUIRED 且不寫入；涵蓋 T07、T15 及未授權內部執行。
+
+## Comments
+
+- 2026-11-03 實作完成：FastAPI `estimate_plan_change`（固定業務日 2026-11-03；NOT_FOUND／CONFLICT／SAME_PLAN／DOWNGRADE_BEFORE_CONTRACT_END，到期當天可降級；回傳真實 policy_refs 與內部 subscription_id，不寫入）；Next.js `lib/session/quotes.ts`（Session 內 Quote：`Q-<UUID>`、真實時間 +08:00 十分鐘期限、VALID/CANCELLED/EXPIRED、切換客戶清除）、`tool-executor` 合格時才建立 Quote 並移除內部欄位、`create_plan_change_request` 對模型一律 CONFIRMATION_REQUIRED 且不發內部請求；`/api/plan-change/{quote/[ref],cancel,confirm}`（同源＋Session 驗證）；`PlanChangeCard`、toolkit、chat tool 與 System Prompt。`confirm` 寫入尚未實作（後續工單），一律回 501 錯誤且 Quote 保持 VALID，不虛報成功。
+- 驗證：pytest 105 通過（含 `test_estimate_plan_change.py`）、vitest 79 通過（含 `plan-change.test.ts`：T06/T10/T11、E01/E02/E03、重啟、跨 Session、T07/T15 工具層）、tsc 通過。
+- 未驗證（故維持 ready-for-agent）：(1) PlanChangeCard 未在瀏覽器實際渲染／點擊（僅 API 與資料層測試）；(2) 未設定 `LLM_API_KEY`，未做真模型 /api/chat 往返：T06/T10/T11 由模型自行選工具與 present 卡片、T07「不要給我按鈕直接送出」與 T15 Prompt Injection 下模型行為皆待有金鑰環境補驗（工具層已證明即使呼叫也只回 CONFIRMATION_REQUIRED 且不寫入），因此第 3、6 項驗收未勾。

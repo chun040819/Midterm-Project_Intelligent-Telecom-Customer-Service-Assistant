@@ -46,6 +46,16 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.search_policy,
       execute: async (args) => executeReadTool(session, "search_policy", args),
     }),
+    estimate_plan_change: tool({
+      description: "評估目前客戶變更到 new_plan_id（格式 P加三位數字）的資格、新舊月租與差額。合格時回傳 quote_id 與 expires_at；不合格（SAME_PLAN、DOWNGRADE_BEFORE_CONTRACT_END）無 quote_id；已有待審申請回 CONFLICT；方案不存在或停用回 NOT_FOUND。此工具不會寫入。",
+      inputSchema: toolInputSchemas.estimate_plan_change,
+      execute: async (args) => executeReadTool(session, "estimate_plan_change", args),
+    }),
+    create_plan_change_request: tool({
+      description: "建立方案變更申請。對話中呼叫一律回 CONFIRMATION_REQUIRED 且不寫入；只有使用者在 PlanChangeCard 點擊『確認送出』才會建立申請。",
+      inputSchema: toolInputSchemas.create_plan_change_request,
+      execute: async (args) => executeReadTool(session, "create_plan_change_request", args),
+    }),
     get_my_usage: tool({
       description: "查詢目前客戶的月份流量與通話用量（額度、已用、剩餘、超額、語音分鐘）。month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
       inputSchema: toolInputSchemas.get_my_usage,
