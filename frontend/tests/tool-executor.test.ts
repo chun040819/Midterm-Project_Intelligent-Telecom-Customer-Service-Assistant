@@ -186,3 +186,51 @@ describe("executeReadTool(list_plans)", () => {
     },
   );
 });
+
+describe("executeReadTool(get_my_usage)", () => {
+  const usage = {
+    status: "success",
+    data: { month: "2026-10", data_limit_gb: 25, data_used_gb: 17.8, remaining_data_gb: 7.2, exceeded_data_gb: 0, voice_used_minutes: 42 },
+    error: null,
+  };
+
+  it("可省略月份，body 為空 arguments，並回傳 data_ref", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(usage));
+    const result = await executeReadTool(session, "get_my_usage", {}, { fetch, baseUrl: "http://internal", token: "tok" });
+    expect(calls[0].url).toBe("http://internal/internal/tools/get_my_usage");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: {} });
+    expect(resolveDataRef(session, result.data_ref!)?.envelope).toEqual(usage);
+  });
+
+  it("傳入有效月份原樣轉送", async () => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(usage));
+    await executeReadTool(session, "get_my_usage", { month: "2026-10" }, { fetch });
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ arguments: { month: "2026-10" } });
+  });
+
+  it.each([
+    { month: "2026-13" },
+    { month: "202610" },
+    { month: "" },
+    { month: null },
+    { month: 202610 },
+    { billing_month: "2026-10" },
+    { month: "2026-10", customer_id: "C0002" },
+  ])("無效輸入 %j 被拒且不發出請求", async (args) => {
+    const session = createSession();
+    const { fetch, calls } = fakeFetch(() => json(usage));
+    const result = await executeReadTool(session, "get_my_usage", args, { fetch });
+    expect(calls).toHaveLength(0);
+    expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "VALIDATION_ERROR" } });
+  });
+
+  it("NOT_FOUND 原樣回傳且不產生 data_ref", async () => {
+    const session = createSession();
+    const nf = { status: "error", data: null, error: { code: "NOT_FOUND", message: "目前查無 2026-11 的流量資料" } };
+    const { fetch } = fakeFetch(() => json(nf, 404));
+    const result = await executeReadTool(session, "get_my_usage", { month: "2026-11" }, { fetch });
+    expect(result).toMatchObject({ status: "error", data_ref: null, error: { code: "NOT_FOUND" } });
+  });
+});
