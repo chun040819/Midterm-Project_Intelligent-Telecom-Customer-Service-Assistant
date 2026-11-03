@@ -37,10 +37,22 @@ export const BillResultSchema = z.object({
 
 export type BillResult = z.infer<typeof BillResultSchema>;
 
+export const UsageResultSchema = z.object({
+  month: MonthSchema,
+  data_limit_gb: z.number().nonnegative(),
+  data_used_gb: z.number().nonnegative(),
+  remaining_data_gb: z.number().nonnegative(),
+  exceeded_data_gb: z.number().nonnegative(),
+  voice_used_minutes: z.number().int().nonnegative(),
+});
+
+export type UsageResult = z.infer<typeof UsageResultSchema>;
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
   get_my_bill: z.object({ billing_month: MonthSchema.optional() }).strict(),
+  get_my_usage: z.object({ month: MonthSchema.optional() }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

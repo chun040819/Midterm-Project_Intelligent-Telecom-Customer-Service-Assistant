@@ -36,6 +36,11 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.get_my_bill,
       execute: async (args) => executeReadTool(session, "get_my_bill", args),
     }),
+    get_my_usage: tool({
+      description: "查詢目前客戶的月份流量與通話用量（額度、已用、剩餘、超額、語音分鐘）。month 格式 YYYY-MM，可省略；省略時查最新有資料月份。",
+      inputSchema: toolInputSchemas.get_my_usage,
+      execute: async (args) => executeReadTool(session, "get_my_usage", args),
+    }),
   };
 
   const result = streamText({

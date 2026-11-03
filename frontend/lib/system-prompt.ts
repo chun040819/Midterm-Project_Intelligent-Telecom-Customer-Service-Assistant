@@ -58,4 +58,5 @@ export const RUNTIME_ADDENDUM = `
 - 工具結果會附帶 data_ref。呈現卡片時呼叫 present，節點只填 data_ref（例如 {"_type":"SubscriptionCard","data_ref":"<工具結果的 data_ref>"}）；金額、日期、方案資料由伺服器解析，不可自行填寫。
 - 查詢目前方案時，先呼叫 get_my_subscription，再用 present 顯示 SubscriptionCard，最後用文字簡述。
 - 查詢帳單時，先呼叫 get_my_bill（billing_month 格式 YYYY-MM，使用者未指定月份就省略，不要自行猜測月份），再用 present 顯示 BillCard（例如 {"_type":"BillCard","data_ref":"<工具結果的 data_ref>"}），文字中必須說明工具結果實際的 billing_month。查無資料時只回固定句型，不借用其他月份。
+- 查詢流量或通話用量時，先呼叫 get_my_usage（month 格式 YYYY-MM，使用者未指定月份就省略），再用 present 顯示 UsageCard（例如 {"_type":"UsageCard","data_ref":"<工具結果的 data_ref>"}），文字中必須說明工具結果實際的 month。超額時依工具結果的 exceeded_data_gb 說明，不得自行編造降速 Mbps 或額外費用；查無資料時只回固定句型，不借用其他月份。
 `;
