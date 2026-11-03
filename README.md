@@ -31,6 +31,12 @@ Next.js 需讀到根目錄 `.env`：`dev.sh` 已匯出；若單獨執行 `npm ru
 
 Next 16.4.4、React 19.3.1、ai 7.0.159、@ai-sdk/openai-compatible 3.0.82、@assistant-ui/react 0.15.32、@assistant-ui/ai-sdk 0.0.16、@assistant-ui/generative-ui 0.0.8、@assistant-ui/next 0.0.25、zod 4.6.7。
 
+## 模型固定版本
+
+- 對話模型：`Furen-large`（`.env` 的 `LLM_MODEL`，課程 NKUST AI Hub 託管）。
+- RAG 嵌入模型：`intfloat/multilingual-e5-small`，revision `614241f622f53c4eeff9890bdc4f31cfecc418b3`（`backend/rag/config.py`）；換版須重跑 `python -m scripts.calibrate_policy` 並更新 `MAX_DISTANCE`。
+- 固定業務判定日：`.env` 的 `DEMO_BUSINESS_DATE`（預設 2026-11-03），為 FastAPI 唯一來源。
+
 ## 尚未驗證
 
 真模型的 Tool Calling、Streaming、`present` 結果回送與續接需要有效 `LLM_API_KEY`，尚未實測。

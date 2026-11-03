@@ -124,8 +124,7 @@ def get_my_usage(conn: sqlite3.Connection, customer_id: str, args: UsageArgument
         params,
     ).fetchone()
     if row is None:
-        msg = f"目前查無 {args.month} 的流量資料" if args.month else "目前查詢不到符合條件的資料，請確認查詢條件。"
-        return error_response(404, "NOT_FOUND", msg)
+        return error_response(404, "NOT_FOUND", "目前查詢不到符合條件的資料，請確認查詢條件。")
     month, limit, used, minutes = row
     return success(
         {
@@ -137,7 +136,12 @@ def get_my_usage(conn: sqlite3.Connection, customer_id: str, args: UsageArgument
     )
 
 
-BUSINESS_DATE = "2026-11-03"  # 固定業務判定日（SPEC §4）；Quote 期限不使用它。
+DEFAULT_BUSINESS_DATE = "2026-11-03"
+
+
+def business_date() -> str:
+    """固定業務判定日（SPEC §4），單一來源為 .env 的 DEMO_BUSINESS_DATE；Quote 期限不使用它。"""
+    return os.environ.get("DEMO_BUSINESS_DATE") or DEFAULT_BUSINESS_DATE
 
 
 class EstimateArguments(BaseModel):
@@ -168,7 +172,7 @@ def estimate_plan_change(conn: sqlite3.Connection, customer_id: str, args: Estim
     refs = ["plan_change_policy#upgrade_rules" if delta > 0 else "plan_change_policy#downgrade_rules"]
     if args.new_plan_id == cur_id:
         reason, refs = "SAME_PLAN", []
-    elif delta < 0 and BUSINESS_DATE < contract_end:  # 到期當天起可降級
+    elif delta < 0 and business_date() < contract_end:  # 到期當天起可降級
         reason = "DOWNGRADE_BEFORE_CONTRACT_END"
     else:
         refs.append("plan_change_policy#review_rule")
@@ -184,8 +188,22 @@ def estimate_plan_change(conn: sqlite3.Connection, customer_id: str, args: Estim
     )
 
 
+class CreateRequestArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    quote_id: Annotated[str, Field(min_length=1, max_length=100, strict=True)]
+
+
+def create_plan_change_request(_conn: sqlite3.Connection, _customer_id: str, _args: CreateRequestArguments):
+    # SPEC §5.5／§7：此通用工具入口沒有受信任的寫入授權 Context，一律拒絕且不寫入。
+    # 授權寫入路徑（confirm Action）屬工單 08，尚未實作。
+    return error_response(
+        409, "CONFIRMATION_REQUIRED", "請先查看方案變更確認卡片，並點擊『確認送出』才會建立待審申請。"
+    )
+
+
 # 工具白名單：名稱 -> (輸入模型, handler)
 TOOLS = {
+    "create_plan_change_request": (CreateRequestArguments, create_plan_change_request),
     "estimate_plan_change": (EstimateArguments, estimate_plan_change),
     "list_plans": (PlansArguments, list_plans),
     "get_my_subscription": (NoArguments, get_my_subscription),

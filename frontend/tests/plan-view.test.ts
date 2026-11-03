@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PlansResultSchema } from "@/lib/contracts";
-import { chartRows, parsePlansEnvelope, selectPlans } from "@/lib/plan-view";
+import { chartRows, formatExpiry, parsePlansEnvelope, selectPlans } from "@/lib/plan-view";
 
 const plan = (plan_id: string, monthly_fee: number, data_limit_gb: number) => ({
   plan_id, name: plan_id, monthly_fee, data_limit_gb, voice_minutes: 80, is_active: true,
@@ -38,5 +38,15 @@ describe("parsePlansEnvelope", () => {
     expect(parsePlansEnvelope({ status: "error", data: null }, false)).toBeNull();
     expect(parsePlansEnvelope({ status: "success", data: { plans: [{ plan_id: "P1" }] } }, true)).toBeNull();
     expect(parsePlansEnvelope(null, true)).toBeNull();
+  });
+});
+
+describe("formatExpiry", () => {
+  it("把 ISO 時間轉成易讀的指定時區時間", () => {
+    expect(formatExpiry("2026-11-03T10:10:00+08:00", "Asia/Taipei")).toBe("2026/11/03 10:10");
+    expect(formatExpiry("2026-11-03T10:10:00+08:00", "UTC")).toBe("2026/11/03 02:10");
+  });
+  it("無法解析時原樣回傳", () => {
+    expect(formatExpiry("not-a-date")).toBe("not-a-date");
   });
 });

@@ -148,7 +148,8 @@ describe("Quote 生命週期（E01／E02／E03）", () => {
     const other = createSession();
     expect(getValidQuote(other, id)).toBeUndefined();
     const res = await cancelPlanChange(cookieReq(other.id, { quote_id: id }));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toEqual({ code: "QUOTE_EXPIRED", message: EXPIRED_MSG });
     expect(getValidQuote(session, id)?.status).toBe("VALID");
   });
 
@@ -160,7 +161,25 @@ describe("Quote 生命週期（E01／E02／E03）", () => {
   });
 });
 
+const EXPIRED_MSG = "此方案變更評估已過期，請重新查詢並確認。";
+
 describe("PlanChangeCard 資料來源與確認閘門", () => {
+  it("confirm 對失效 Quote 回 409 QUOTE_EXPIRED 與 System Prompt 固定句", async () => {
+    const { session } = await estimate();
+    const res = await confirmPlanChange(cookieReq(session.id, { quote_id: "Q-missing" }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toEqual({ code: "QUOTE_EXPIRED", message: EXPIRED_MSG });
+  });
+
+  it("cancel 對已取消的 Quote 回 409 QUOTE_EXPIRED", async () => {
+    const { session, result } = await estimate();
+    const id = (result.data as { quote_id: string }).quote_id;
+    await cancelPlanChange(cookieReq(session.id, { quote_id: id }));
+    const res = await cancelPlanChange(cookieReq(session.id, { quote_id: id }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toEqual({ code: "QUOTE_EXPIRED", message: EXPIRED_MSG });
+  });
+
   it("quote view 只回顯可信資料與政策提醒", async () => {
     const { session, result } = await estimate();
     const id = (result.data as { quote_id: string }).quote_id;

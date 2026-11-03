@@ -61,6 +61,11 @@ def test_omitted_month_uses_latest_with_data(client, db_path):
     assert usage(client).json()["data"]["month"] == "2026-09"
 
 
+def test_missing_month_uses_system_prompt_fixed_sentence(client):
+    body = usage(client, {"month": "2026-11"}).json()
+    assert body["error"]["message"] == "目前查詢不到符合條件的資料，請確認查詢條件。"
+
+
 def test_t04_no_november_data(client):
     r = usage(client, {"month": "2026-11"})
     assert r.status_code == 404

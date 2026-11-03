@@ -49,6 +49,7 @@ def test_every_chunk_within_512_tokens(embedder):
         ("100 GB 用完怎樣？", "data_usage_policy#exceeded"),
         ("提前解約一定要付多少違約金？", "cancellation_policy#penalty_unknown"),  # E04
         ("合約到期怎麼算？", "contract_policy#contract_expiry"),
+        ("為何 10 月是 499？", "billing_policy#monthly_fee"),  # SPEC §8.1 範例
     ],
 )
 def test_positive_questions_hit_expected_section(retriever, query, expected):

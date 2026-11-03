@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PlanChangeEstimateSchema, type PlanChangeEstimate } from "@/lib/contracts";
+import { formatExpiry } from "@/lib/plan-view";
 
 type State =
   | { kind: "loading" }
@@ -48,7 +49,7 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
       });
       const body = await res.json().catch(() => null);
       if (path === "cancel" && res.ok && body?.status === "success") return setState({ kind: "cancelled" });
-      if (res.status === 404 || res.status === 410) return setState({ kind: "invalid" });
+      if (res.status === 404 || body?.error?.code === "QUOTE_EXPIRED") return setState({ kind: "invalid" });
       // 寫入功能完成前，confirm 只會得到錯誤；如實顯示，不宣稱成功。
       setState({ kind: "ready", data, busy: false, message: body?.error?.message ?? "目前系統無法完成這項操作，請稍後再試。" });
     } catch {
@@ -81,7 +82,7 @@ export function PlanChangeCard({ quote_ref }: { quote_ref: string }) {
         <button type="button" disabled={state.busy} onClick={() => act("confirm")}>確認送出</button>
         <button type="button" disabled={state.busy} onClick={() => act("cancel")}>取消</button>
       </div>
-      <footer>評估有效至 {d.expires_at}</footer>
+      <footer>評估有效至 {d.expires_at ? formatExpiry(d.expires_at) : "—"}</footer>
     </section>
   );
 }

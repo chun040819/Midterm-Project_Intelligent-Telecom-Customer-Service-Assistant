@@ -30,7 +30,8 @@ function withQuote(session: DemoSession, raw: unknown): ToolEnvelope<PlanChangeE
 }
 
 /**
- * 八個業務工具的 Next.js 端執行入口（目前實作 get_my_subscription、get_my_bill）。
+ * 八個業務工具的 Next.js 端執行入口：讀取類工具轉發 FastAPI，estimate_plan_change 另建立 Quote，
+ * create_plan_change_request 在此一律 CONFIRMATION_REQUIRED（授權寫入屬 confirm Action）。
  * 客戶身分只取自 session；模型輸入先經 strict Zod 驗證，失敗時不會發出任何內部請求。
  */
 export async function executeReadTool(

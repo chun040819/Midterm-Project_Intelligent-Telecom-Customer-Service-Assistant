@@ -5,7 +5,12 @@ function errorBody(code: string, message: string) {
   return { status: "error", data: null, error: { code, message } };
 }
 
-const QUOTE_GONE = "此方案變更評估已失效，請重新查詢並確認。";
+// System Prompt §4 固定句；SPEC §6.4：QUOTE_EXPIRED 為 409。
+const QUOTE_GONE = "此方案變更評估已過期，請重新查詢並確認。";
+
+function quoteExpired(): Response {
+  return jsonWithSession(errorBody("QUOTE_EXPIRED", QUOTE_GONE), null, 409);
+}
 
 /** PlanChangeCard 以 quote_ref 解析：只回傳本 Session、目前客戶、仍有效的 Quote 的可顯示欄位。 */
 export function getQuoteView(req: Request, quoteRef: string): Response {
@@ -34,28 +39,33 @@ async function readQuoteId(req: Request): Promise<string | undefined> {
   return keys.length === 1 && typeof id === "string" && id.length > 0 && id.length <= 100 ? id : undefined;
 }
 
-/** cancel_plan_change：同源＋Session 持有有效 Quote 才失效；不建立、也不取消任何已提交申請。 */
-export async function cancelPlanChange(req: Request): Promise<Response> {
+type Gate = { session: NonNullable<ReturnType<typeof sessionFromRequest>>; quoteId: string } | Response;
+
+/** cancel／confirm 共用前置：同源 → 請求格式 → Session。 */
+async function gate(req: Request): Promise<Gate> {
   if (!isSameOrigin(req)) return jsonWithSession(errorBody("FORBIDDEN", "請求來源不被允許。"), null, 403);
   const quoteId = await readQuoteId(req);
   if (!quoteId) return jsonWithSession(errorBody("VALIDATION_ERROR", "請求格式或參數無效。"), null, 422);
   const session = sessionFromRequest(req);
-  if (!session || !cancelQuote(session, quoteId)) {
-    return jsonWithSession(errorBody("NOT_FOUND", QUOTE_GONE), null, 404);
-  }
+  if (!session) return quoteExpired();
+  return { session, quoteId };
+}
+
+/** cancel_plan_change：同源＋Session 持有有效 Quote 才失效；不建立、也不取消任何已提交申請。 */
+export async function cancelPlanChange(req: Request): Promise<Response> {
+  const g = await gate(req);
+  if (g instanceof Response) return g;
+  if (!cancelQuote(g.session, g.quoteId)) return quoteExpired();
   return jsonWithSession({ status: "success", data: { cancelled: true }, error: null }, null);
 }
 
 /**
  * confirm_plan_change：閘門（同源、Session、有效 Quote）已就緒，但寫入 PENDING 的功能尚未實作
- * （後續工單）。在此之前一律不寫入、不改 Quote 狀態，也絕不回報成功。
+ * （工單 08）。在此之前一律不寫入、不改 Quote 狀態，也絕不回報成功。
  */
 export async function confirmPlanChange(req: Request): Promise<Response> {
-  if (!isSameOrigin(req)) return jsonWithSession(errorBody("FORBIDDEN", "請求來源不被允許。"), null, 403);
-  const quoteId = await readQuoteId(req);
-  if (!quoteId) return jsonWithSession(errorBody("VALIDATION_ERROR", "請求格式或參數無效。"), null, 422);
-  if (!getValidQuote(sessionFromRequest(req), quoteId)) {
-    return jsonWithSession(errorBody("QUOTE_EXPIRED", QUOTE_GONE), null, 410);
-  }
+  const g = await gate(req);
+  if (g instanceof Response) return g;
+  if (!getValidQuote(g.session, g.quoteId)) return quoteExpired();
   return jsonWithSession(errorBody("INTERNAL_ERROR", "確認送出功能尚未開放，目前不會建立任何申請。"), null, 501);
 }

@@ -39,6 +39,12 @@ def test_downgrade_on_contract_end_day_is_eligible(client, db_path):
     assert d["eligible"] is True and d["reason_code"] is None and d["monthly_delta"] == -200
 
 
+def test_business_date_comes_from_env(client, monkeypatch):
+    monkeypatch.setenv("DEMO_BUSINESS_DATE", "2026-11-10")  # C0004 合約到期日
+    d = estimate(client, "P499", customer="C0004").json()["data"]
+    assert d["eligible"] is True and d["reason_code"] is None
+
+
 def test_downgrade_after_contract_end_is_eligible(client):
     d = estimate(client, "P699", customer="C0003").json()["data"]  # C0003 合約 2026-10-31 已到期
     assert d["eligible"] is True and d["monthly_delta"] == -300

@@ -19,6 +19,18 @@ export function selectPlans(trusted: PlansResult, selectedIds: string[] | undefi
   return trusted.plans.filter((p) => wanted.has(p.plan_id));
 }
 
+/** ISO 8601 → 「YYYY/MM/DD HH:mm」本地時間（timeZone 省略時用瀏覽器時區）；無法解析則原樣回傳。 */
+export function formatExpiry(iso: string, timeZone?: string): string {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return iso;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(ms).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
 export function chartRows(plans: Plan[], metric: ChartMetric) {
   return plans.map((p) => ({ plan_id: p.plan_id, name: p.name, value: p[metric] }));
 }

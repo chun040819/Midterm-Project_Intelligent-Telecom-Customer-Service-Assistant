@@ -23,7 +23,7 @@ CASES = [
     ("提前解約一定要付多少違約金？", "cancellation_policy#penalty_unknown"),
     ("能替我解約嗎？", "cancellation_policy#cancellation_scope"),
     ("合約到期怎麼算？", "contract_policy#contract_expiry"),
-    # 「為何 10 月是 499？」距離 0.154，與負向最近距離 0.1595 幾乎重疊，無法以單一閾值穩定區分，故不納入校準集。
+    ("為何 10 月是 499？", "billing_policy#monthly_fee"),
     ("可以同時申請兩筆方案變更嗎？", "plan_change_policy#pending_rule"),
     ("你們有 5G 企業漫遊 8 折嗎？", None),
     ("今天台北天氣如何？", None),
