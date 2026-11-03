@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.db.seed import connect
+from backend.rag import config as rag_config
+from backend.rag.retriever import PolicyRetriever, PolicySearchError
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
@@ -83,15 +85,50 @@ TOOLS = {
 }
 
 
+class PolicyArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: Annotated[str, Field(min_length=1, max_length=500, strict=True)]
+
+
+def make_search_policy(get_retriever):
+    def search_policy(_conn: sqlite3.Connection, _customer_id: str, args: PolicyArguments):
+        try:
+            matches = get_retriever().search(args.query)
+        except PolicySearchError:
+            return error_response(500, "INTERNAL_ERROR", "政策檢索服務暫時無法使用，無法確認政策內容。")
+        if not matches:
+            return error_response(422, "INSUFFICIENT_EVIDENCE", "知識庫沒有足夠的政策依據，無法確認。")
+        return success({"matches": matches})
+
+    return search_policy
+
+
 class ToolRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     arguments: dict[str, Any] = {}
 
 
-def create_app(db_path: str | None = None, internal_token: str | None = None) -> FastAPI:
+def create_app(
+    db_path: str | None = None, internal_token: str | None = None, policy_retriever=None
+) -> FastAPI:
     db_path = db_path or os.environ.get("SQLITE_PATH", "./.local/telcocare.sqlite3")
     token = internal_token if internal_token is not None else os.environ.get("INTERNAL_SERVICE_TOKEN", "")
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    lazy: dict = {}
+
+    def get_retriever():
+        if policy_retriever is not None:
+            return policy_retriever
+        if "r" not in lazy:  # 延遲載入，避免未使用 RAG 時啟動就載入模型
+            try:
+                from backend.rag.embedder import E5Embedder
+
+                lazy["r"] = PolicyRetriever(rag_config.chroma_path(), E5Embedder())
+            except Exception as e:
+                raise PolicySearchError(f"嵌入模型載入失敗：{e}") from e
+        return lazy["r"]
+
+    tools = {**TOOLS, "search_policy": (PolicyArguments, make_search_policy(get_retriever))}
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):
@@ -106,7 +143,7 @@ def create_app(db_path: str | None = None, internal_token: str | None = None) ->
         supplied = request.headers.get("X-Internal-Token", "")
         if not token or not hmac.compare_digest(supplied.encode(), token.encode()):
             return error_response(403, "FORBIDDEN", "無權存取。")
-        if tool_name not in TOOLS:
+        if tool_name not in tools:
             return error_response(404, "NOT_FOUND", "不存在的工具。")
         customer_id = request.headers.get("X-Demo-Customer-Id", "")
         conn = connect(db_path)
@@ -115,7 +152,7 @@ def create_app(db_path: str | None = None, internal_token: str | None = None) ->
                 return error_response(403, "FORBIDDEN", "為保護客戶資料，我只能查詢目前 Demo 帳戶的資訊。")
             try:
                 body = ToolRequest.model_validate(await request.json())
-                model, handler = TOOLS[tool_name]
+                model, handler = tools[tool_name]
                 args = model.model_validate(body.arguments)
             except (ValidationError, ValueError):
                 return error_response(422, "VALIDATION_ERROR", "工具參數無效。")

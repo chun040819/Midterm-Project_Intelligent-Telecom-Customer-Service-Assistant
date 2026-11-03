@@ -4,3 +4,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; [ -f .env ] && . ./.env; set +a
 .venv/bin/python -m backend.db.seed
+.venv/bin/python -m backend.rag.build_index

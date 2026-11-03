@@ -37,10 +37,28 @@ export const BillResultSchema = z.object({
 
 export type BillResult = z.infer<typeof BillResultSchema>;
 
+export const PolicyMatchSchema = z.object({
+  document_id: z.string(),
+  title: z.string(),
+  section_id: z.string(),
+  section_title: z.string(),
+  content: z.string(),
+  source_path: z.string(),
+});
+
+export const SearchPolicyResultSchema = z.object({ matches: z.array(PolicyMatchSchema) });
+
+export type PolicyMatch = z.infer<typeof PolicyMatchSchema>;
+export type SearchPolicyResult = z.infer<typeof SearchPolicyResultSchema>;
+
+/** `document_id#section_id`；僅允許小寫英數與底線，不接受路徑、URL。 */
+export const SourceRefSchema = z.string().regex(/^[a-z0-9_]+#[a-z0-9_]+$/);
+
 // 模型可見的工具 Input（SPEC §5.3）。strict() 對應 additionalProperties:false。
 export const toolInputSchemas = {
   get_my_subscription: z.object({}).strict(),
   get_my_bill: z.object({ billing_month: MonthSchema.optional() }).strict(),
+  search_policy: z.object({ query: z.string().min(1).max(500) }).strict(),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;

@@ -36,6 +36,11 @@ export async function POST(req: Request) {
       inputSchema: toolInputSchemas.get_my_bill,
       execute: async (args) => executeReadTool(session, "get_my_bill", args),
     }),
+    search_policy: tool({
+      description: "搜尋虛構電信公司的合約、流量、帳單、解約與變更政策（本地知識庫）。query 為使用者的政策問題。查無依據會回 INSUFFICIENT_EVIDENCE。",
+      inputSchema: toolInputSchemas.search_policy,
+      execute: async (args) => executeReadTool(session, "search_policy", args),
+    }),
   };
 
   const result = streamText({
